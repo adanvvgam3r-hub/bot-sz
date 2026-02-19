@@ -12,7 +12,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder
+  EmbedBuilder,
+  PermissionsBitField,
 } = require("discord.js");
 
 // ----------------- CLIENT -----------------
@@ -24,8 +25,8 @@ const APOSTADO_CHANNEL = "1473873854232264886";
 const X1_CHANNEL = "1473873994674606231";
 const SIMU_CHANNEL = "1465842384586670254";
 
-const SIMU_PERMITIDO = "1453126709447754010"; // Cargo que pode criar Simu
-const STAFF_IDS = ["1452822476949029001", "1452822605773148312"]; // Dono + Staff
+const SIMU_PERMITIDO = "1453126709447754010";
+const STAFF_IDS = ["1452822476949029001", "1452822605773148312"];
 const RANKING_FILE = "./ranking.json";
 
 // ----------------- UTILS -----------------
@@ -57,7 +58,7 @@ function criarEmbedRanking() {
     id,
     nome: data.nome,
     "#1": data["#1"],
-    "#2": data["#2"]
+    "#2": data["#2"],
   }));
   rankingArray.sort((a, b) => {
     if (b["#1"] === a["#1"]) return b["#2"] - a["#2"];
@@ -101,7 +102,7 @@ client.once("ready", () => console.log(`Bot online como ${client.user.tag}`));
 // ----------------- INTERAÇÕES -----------------
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
-    const { commandName, channelId, member, user } = interaction;
+    const { commandName, channelId, member, user, guild } = interaction;
 
     // ----------------- PARCERIA -----------------
     if (commandName === "parceria") {
@@ -118,28 +119,26 @@ client.on("interactionCreate", async (interaction) => {
         new ActionRowBuilder().addComponents(imagem),
         new ActionRowBuilder().addComponents(link)
       );
-      await interaction.showModal(modal);
+      return interaction.showModal(modal);
     }
 
     // ----------------- RANKING -----------------
     if (commandName === "ranking") {
       if (channelId !== RANKING_CHANNEL) return interaction.reply({ content: "Este comando só pode ser usado no canal de Ranking.", ephemeral: true });
-      const embed = criarEmbedRanking();
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply({ embeds: [criarEmbedRanking()] });
     }
 
     // ----------------- APOSTADO -----------------
     if (commandName === "apostado") {
       if (channelId !== APOSTADO_CHANNEL) return interaction.reply({ content: "Este comando só pode ser usado no canal de Apostado.", ephemeral: true });
-      // lógica X1 Apostado aqui
-      return interaction.reply({ content: "Sistema de X1 Apostado (em desenvolvimento).", ephemeral: true });
+      // Função de criação de canal + botão entrar, declarar vencedor
+      return interaction.reply({ content: "Sistema de X1 Apostado pronto para implementar lógica de partida.", ephemeral: true });
     }
 
     // ----------------- X1 -----------------
     if (commandName === "x1") {
       if (channelId !== X1_CHANNEL) return interaction.reply({ content: "Este comando só pode ser usado no canal de X1.", ephemeral: true });
-      // lógica X1 aqui
-      return interaction.reply({ content: "Sistema de X1 (em desenvolvimento).", ephemeral: true });
+      return interaction.reply({ content: "Sistema de X1 pronto para implementar lógica de partida.", ephemeral: true });
     }
 
     // ----------------- SIMU -----------------
@@ -148,7 +147,7 @@ client.on("interactionCreate", async (interaction) => {
       if (!member.roles.cache.has(SIMU_PERMITIDO) && !STAFF_IDS.includes(user.id)) {
         return interaction.reply({ content: "Você não tem permissão para criar Simu.", ephemeral: true });
       }
-      return interaction.reply({ content: "Sistema de Simu (em desenvolvimento).", ephemeral: true });
+      return interaction.reply({ content: "Sistema de Simu pronto para implementar bracket e times.", ephemeral: true });
     }
   }
 
@@ -170,11 +169,11 @@ client.on("interactionCreate", async (interaction) => {
         );
 
       const botao = new ButtonBuilder().setLabel("Entre no server").setStyle(ButtonStyle.Link).setURL(link);
-
-      await interaction.reply({ embeds: [embed], components: [{ type: 1, components: [botao] }] });
+      return interaction.reply({ embeds: [embed], components: [{ type: 1, components: [botao] }] });
     }
   }
 });
 
 // ----------------- LOGIN -----------------
 client.login(process.env.TOKEN);
+
