@@ -14,7 +14,7 @@ const IDS = {
   ROLES: { STAFF: "1452822476949029001", DONO: "1452822605773148312", ORGANIZADOR: "1453126709447754010" }
 };
 
-// Funções Auxiliares de Banco de Dados
+// Funções de Banco de Dados
 function loadData(file) { 
   if (!fs.existsSync(`./${file}.json`)) fs.writeFileSync(`./${file}.json`, "{}");
   return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}"); 
@@ -70,7 +70,6 @@ client.on("interactionCreate", async (interaction) => {
           row1.addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
         }
       }
-      
       const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_simu_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger));
 
       await interaction.reply({ embeds: [embed], components: [row1, row2] });
@@ -91,7 +90,7 @@ client.on("interactionCreate", async (interaction) => {
 
     if (action === "out") {
       copa.players = copa.players.filter(id => id !== interaction.user.id);
-      Object.keys(copa.teams).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
+      Object.keys(copa.teams).forEach(t => copa.teams[t] = (copa.teams[t] || []).filter(id => id !== interaction.user.id));
     } else if (action === "in") {
       if (copa.players.length < copa.vagas && !copa.players.includes(interaction.user.id)) copa.players.push(interaction.user.id);
     } else if (action === "tm") {
@@ -109,7 +108,7 @@ client.on("interactionCreate", async (interaction) => {
       : Object.entries(copa.teams).map(([t, m]) => `**Time ${t}:** ${m.map(id => `<@${id}>`).join(", ") || "*Vazio*"}`).join("\n");
 
     const total = copa.tipo === "1v1" ? copa.players.length : Object.values(copa.teams).flat().length;
-    const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setFields(
+    const newEmbed = EmbedBuilder.from(interaction.message.embeds).setFields(
       { name: "🗺️ Mapa", value: copa.mapa, inline: true },
       { name: "👥 Vagas", value: `${total}/${copa.vagas}`, inline: true },
       { name: "🎮 Tipo", value: copa.tipo, inline: true },
