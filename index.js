@@ -45,6 +45,19 @@ const FILES = {
   TOURNAMENTS: "./tournaments.json",
 };
 
+const EMOTES = {
+  VS: "⚔️",
+  WIN: "🏆",
+  PLAY: "🎮",
+  BET: "🎰",
+  ENTER: "➡️",
+  EXIT: "❌",
+  CHECK: "✅",
+  INFO: "ℹ️",
+  BRACKET: "🗂️",
+  TEAM: "⚽",
+};
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -55,17 +68,66 @@ const client = new Client({
 });
 
 // ═════════════════════════════════════════════════════════════════════
-// ========================= UTILS - RANKING =========================
+// ========================= UTILS - FILE OPERATIONS =================
 // ═════════════════════════════════════════════════════════════════════
 
 function carregarRanking() {
-  if (!fs.existsSync(FILES.RANKING)) return {};
-  return JSON.parse(fs.readFileSync(FILES.RANKING, "utf-8"));
+  try {
+    if (!fs.existsSync(FILES.RANKING)) return {};
+    return JSON.parse(fs.readFileSync(FILES.RANKING, "utf-8"));
+  } catch (error) {
+    console.error("Erro ao carregar ranking:", error);
+    return {};
+  }
 }
 
 function salvarRanking(ranking) {
-  fs.writeFileSync(FILES.RANKING, JSON.stringify(ranking, null, 2));
+  try {
+    fs.writeFileSync(FILES.RANKING, JSON.stringify(ranking, null, 2));
+  } catch (error) {
+    console.error("Erro ao salvar ranking:", error);
+  }
 }
+
+function carregarMatches() {
+  try {
+    if (!fs.existsSync(FILES.MATCHES)) return {};
+    return JSON.parse(fs.readFileSync(FILES.MATCHES, "utf-8"));
+  } catch (error) {
+    console.error("Erro ao carregar matches:", error);
+    return {};
+  }
+}
+
+function salvarMatches(matches) {
+  try {
+    fs.writeFileSync(FILES.MATCHES, JSON.stringify(matches, null, 2));
+  } catch (error) {
+    console.error("Erro ao salvar matches:", error);
+  }
+}
+
+function carregarTournaments() {
+  try {
+    if (!fs.existsSync(FILES.TOURNAMENTS)) return {};
+    return JSON.parse(fs.readFileSync(FILES.TOURNAMENTS, "utf-8"));
+  } catch (error) {
+    console.error("Erro ao carregar tournaments:", error);
+    return {};
+  }
+}
+
+function salvarTournaments(tournaments) {
+  try {
+    fs.writeFileSync(FILES.TOURNAMENTS, JSON.stringify(tournaments, null, 2));
+  } catch (error) {
+    console.error("Erro ao salvar tournaments:", error);
+  }
+}
+
+// ════════════════════════════════════════════════════════════��════════
+// ========================= UTILS - RANKING ==========================
+// ═════════════════════════════════════════════════════════════════════
 
 function atualizarRanking(vencedorIds, viceIds) {
   const ranking = carregarRanking();
@@ -112,33 +174,11 @@ function criarEmbedRanking() {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// ========================= UTILS - MATCHES ==========================
+// ========================= UTILS - IDs ==============================
 // ═════════════════════════════════════════════════════════════════════
-
-function carregarMatches() {
-  if (!fs.existsSync(FILES.MATCHES)) return {};
-  return JSON.parse(fs.readFileSync(FILES.MATCHES, "utf-8"));
-}
-
-function salvarMatches(matches) {
-  fs.writeFileSync(FILES.MATCHES, JSON.stringify(matches, null, 2));
-}
 
 function criarMatchId() {
   return `match_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// ========================= UTILS - TOURNAMENT =======================
-// ═════════════════════════════════════════════════════════════════════
-
-function carregarTournaments() {
-  if (!fs.existsSync(FILES.TOURNAMENTS)) return {};
-  return JSON.parse(fs.readFileSync(FILES.TOURNAMENTS, "utf-8"));
-}
-
-function salvarTournaments(tournaments) {
-  fs.writeFileSync(FILES.TOURNAMENTS, JSON.stringify(tournaments, null, 2));
 }
 
 function criarTournamentId() {
@@ -150,12 +190,6 @@ function criarTournamentId() {
 // ═════════════════════════════════════════════════════════════════════
 
 function gerarBracketAutomatico(times, tipoJogo) {
-  /**
-   * Gera bracket automático baseado no tipo de jogo
-   * 1v1: C1 vs C16, C2 vs C15, C3 vs C14...
-   * 2v2, 3v3, 4v4: mesma lógica
-   */
-
   const timesArray = Object.entries(times)
     .filter(([_, players]) => players && players.length > 0)
     .map(([idx, players]) => ({
@@ -167,7 +201,6 @@ function gerarBracketAutomatico(times, tipoJogo) {
     return [];
   }
 
-  // Gerar bracket de forma espelhada (C1 vs Última, C2 vs Penúltima, etc)
   const bracket = [];
   let left = 0;
   let right = timesArray.length - 1;
@@ -188,10 +221,7 @@ function gerarBracketAutomatico(times, tipoJogo) {
   return bracket;
 }
 
-function gerarProximaFase(vencedores, tipoJogo) {
-  /**
-   * Gera a próxima fase baseada nos vencedores
-   */
+function gerarProximaFase(vencedores) {
   if (vencedores.length < 2) {
     return [];
   }
@@ -223,7 +253,7 @@ function obterProximaFase(faseAtual) {
 // ═════════════════════════════════════════════════════════════════════
 
 async function criarX1(interaction, isApostado = false) {
-  const { user, member, guild, channelId } = interaction;
+  const { user, channelId } = interaction;
   const canalCorreto = isApostado ? CHANNELS.APOSTADO : CHANNELS.X1;
 
   if (channelId !== canalCorreto) {
@@ -233,7 +263,6 @@ async function criarX1(interaction, isApostado = false) {
     });
   }
 
-  // Criar Modal
   const modal = new ModalBuilder()
     .setCustomId(`modal_${isApostado ? "apostado" : "x1"}_${user.id}_${Date.now()}`)
     .setTitle(isApostado ? "Criar X1 Apostado" : "Criar X1");
@@ -259,363 +288,219 @@ async function criarX1(interaction, isApostado = false) {
 }
 
 async function processarX1Modal(interaction, isApostado = false) {
-  const { user, guild, channel } = interaction;
-  const mapa = interaction.fields.getTextInputValue("mapa");
-  const valor = isApostado ? interaction.fields.getTextInputValue("valor") : null;
-
-  const matchId = criarMatchId();
-  const matches = carregarMatches();
-
-  matches[matchId] = {
-    tipo: isApostado ? "apostado" : "x1",
-    criador: user.id,
-    mapa,
-    valor: isApostado ? parseFloat(valor) : 0,
-    jogador2: null,
-    status: "pendente",
-    canalPrivado: null,
-    canalOrigem: channel.id,
-    criadoEm: new Date().toISOString(),
-  };
-
-  salvarMatches(matches);
-
-  // Embed com botões Sim/Não
-  const embed = new EmbedBuilder()
-    .setTitle(isApostado ? "🎰 X1 Apostado" : "🎮 X1")
-    .setDescription(`<@${user.id}> criou um ${isApostado ? "X1 Apostado" : "X1"}!`)
-    .addFields(
-      { name: "Mapa", value: mapa, inline: true },
-      isApostado ? { name: "Valor", value: `R$ ${valor}`, inline: true } : null
-    )
-    .setColor(isApostado ? 16753920 : 3066993);
-
-  const botoesEscolha = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`x1_sim_${matchId}`)
-      .setLabel("Sim (desafiar alguém)")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`x1_nao_${matchId}`)
-      .setLabel("Não (aberto para todos)")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  return interaction.reply({ embeds: [embed], components: [botoesEscolha] });
-}
-
-// Quando clica em SIM - pedir menção
-async function handleX1Sim(interaction, matchId) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  const modal = new ModalBuilder()
-    .setCustomId(`modal_x1_mencionar_${matchId}`)
-    .setTitle("Mencionar Jogador");
-
-  const mencao = new TextInputBuilder()
-    .setCustomId("mencao")
-    .setLabel("Mencione o jogador ou cole o ID")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setPlaceholder("@jogador ou 123456789");
-
-  modal.addComponents(new ActionRowBuilder().addComponents(mencao));
-
-  return interaction.showModal(modal);
-}
-
-// Processar menção e enviar DM
-async function processarMencaoX1(interaction, matchId) {
-  const mencaoText = interaction.fields.getTextInputValue("mencao").trim();
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  // Extrair ID da menção
-  let targetId = mencaoText.replace(/[<@!>]/g, "");
-
-  if (!targetId || targetId === match.criador) {
-    return interaction.reply({
-      content: "ID inválido ou você não pode desafiar a si mesmo.",
-      ephemeral: true,
-    });
-  }
-
-  match.jogador2 = targetId;
-  matches[matchId].status = "convite_enviado";
-  salvarMatches(matches);
-
-  // Enviar DM para o jogador
   try {
-    const user = await interaction.client.users.fetch(targetId);
-    const dmEmbed = new EmbedBuilder()
-      .setTitle(match.tipo === "apostado" ? "🎰 X1 Apostado" : "🎮 X1 Convite")
-      .setDescription(`<@${match.criador}> quer jogar um ${match.tipo === "apostado" ? "X1 Apostado" : "X1"}!`)
-      .addFields(
-        { name: "Mapa", value: match.mapa, inline: true },
-        match.tipo === "apostado" ? { name: "Valor", value: `R$ ${match.valor}`, inline: true } : null
-      )
-      .setColor(match.tipo === "apostado" ? 16753920 : 3066993);
+    const { user, channel } = interaction;
+    const mapa = interaction.fields.getTextInputValue("mapa");
+    const valor = isApostado ? interaction.fields.getTextInputValue("valor") : null;
 
-    const botoesResposta = new ActionRowBuilder().addComponents(
+    const matchId = criarMatchId();
+    const matches = carregarMatches();
+
+    matches[matchId] = {
+      tipo: isApostado ? "apostado" : "x1",
+      criador: user.id,
+      mapa,
+      valor: isApostado ? parseFloat(valor) : 0,
+      jogador2: null,
+      status: "aberto",
+      canalPrivado: null,
+      canalOrigem: channel.id,
+      criadoEm: new Date().toISOString(),
+    };
+
+    salvarMatches(matches);
+
+    const titulo = isApostado ? `${EMOTES.BET} X1 Apostado` : `${EMOTES.PLAY} X1`;
+    const embed = new EmbedBuilder()
+      .setTitle(titulo)
+      .setDescription(`${EMOTES.ENTER} <@${user.id}> abriu um ${isApostado ? "X1 Apostado" : "X1"}!`)
+      .addFields(
+        { name: `${EMOTES.INFO} Mapa`, value: mapa, inline: true },
+        isApostado ? { name: `${EMOTES.BET} Valor`, value: `R$ ${valor}`, inline: true } : null
+      )
+      .setColor(isApostado ? 16753920 : 3066993);
+
+    const botoes = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`x1_aceitar_${matchId}`)
-        .setLabel("Aceitar")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`x1_recusar_${matchId}`)
-        .setLabel("Recusar")
-        .setStyle(ButtonStyle.Danger)
+        .setCustomId(`x1_entrar_${matchId}`)
+        .setLabel(`${EMOTES.ENTER} Entrar`)
+        .setStyle(ButtonStyle.Success)
     );
 
-    await user.send({ embeds: [dmEmbed], components: [botoesResposta] });
+    return interaction.reply({ embeds: [embed], components: [botoes] });
+  } catch (error) {
+    console.error("Erro ao processar X1 modal:", error);
+    return interaction.reply({
+      content: `${EMOTES.EXIT} Erro ao criar X1. Tente novamente.`,
+      ephemeral: true,
+    });
+  }
+}
+
+async function handleX1Entrar(interaction, matchId) {
+  try {
+    const matches = carregarMatches();
+    const match = matches[matchId];
+
+    if (!match) {
+      return interaction.reply({ content: `${EMOTES.EXIT} Match não encontrado.`, ephemeral: true });
+    }
+
+    if (interaction.user.id === match.criador) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Você não pode entrar no seu próprio X1.`,
+        ephemeral: true,
+      });
+    }
+
+    if (match.jogador2) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Este X1 já está completo.`,
+        ephemeral: true,
+      });
+    }
+
+    match.jogador2 = interaction.user.id;
+    matches[matchId].status = "pronto";
+    salvarMatches(matches);
+
+    const guild = interaction.guild || (await interaction.client.guilds.fetch(process.env.GUILD_ID));
+    await criarCanalPrivadoX1(guild, matchId, match.tipo === "apostado");
 
     return interaction.reply({
-      content: `✅ Convite enviado para <@${targetId}>!`,
-      ephemeral: true,
+      content: `${EMOTES.CHECK} <@${interaction.user.id}> entrou no X1! Canal privado criado.`,
+      ephemeral: false,
     });
   } catch (error) {
-    console.error("Erro ao enviar DM:", error);
+    console.error("Erro ao entrar em X1:", error);
     return interaction.reply({
-      content: "Não consegui enviar DM para este jogador.",
+      content: `${EMOTES.EXIT} Erro ao entrar. Tente novamente.`,
       ephemeral: true,
     });
   }
-}
-
-// Quando clica em NÃO - criar botão de entrar
-async function handleX1Nao(interaction, matchId) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  matches[matchId].status = "aberto";
-  salvarMatches(matches);
-
-  const embed = new EmbedBuilder()
-    .setTitle(match.tipo === "apostado" ? "🎰 X1 Apostado" : "🎮 X1")
-    .setDescription(`<@${match.criador}> abriu um ${match.tipo === "apostado" ? "X1 Apostado" : "X1"}!`)
-    .addFields(
-      { name: "Mapa", value: match.mapa, inline: true },
-      match.tipo === "apostado" ? { name: "Valor", value: `R$ ${match.valor}`, inline: true } : null
-    )
-    .setColor(match.tipo === "apostado" ? 16753920 : 3066993);
-
-  const botoes = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`x1_entrar_${matchId}`)
-      .setLabel("Entrar no X1")
-      .setStyle(ButtonStyle.Success)
-  );
-
-  // Editar a mensagem original
-  await interaction.update({ embeds: [embed], components: [botoes] });
-}
-
-// Aceitar convite
-async function handleX1Aceitar(interaction, matchId) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  if (interaction.user.id !== match.jogador2) {
-    return interaction.reply({
-      content: "Este convite não é para você.",
-      ephemeral: true,
-    });
-  }
-
-  matches[matchId].status = "aceito";
-  salvarMatches(matches);
-
-  const guild = interaction.guild || (await interaction.client.guilds.fetch(process.env.GUILD_ID));
-  await criarCanalPrivadoX1(guild, matchId, match.tipo === "apostado");
-
-  return interaction.reply({
-    content: `✅ Você aceitou o desafio! Canal privado criado.`,
-    ephemeral: true,
-  });
-}
-
-// Recusar convite
-async function handleX1Recusar(interaction, matchId) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  if (interaction.user.id !== match.jogador2) {
-    return interaction.reply({
-      content: "Este convite não é para você.",
-      ephemeral: true,
-    });
-  }
-
-  delete matches[matchId];
-  salvarMatches(matches);
-
-  return interaction.reply({
-    content: `❌ Você recusou o desafio.`,
-    ephemeral: true,
-  });
-}
-
-// Entrar em X1 aberto
-async function handleX1Entrar(interaction, matchId) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
-
-  if (!match) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
-
-  if (interaction.user.id === match.criador) {
-    return interaction.reply({
-      content: "Você não pode entrar no seu próprio X1.",
-      ephemeral: true,
-    });
-  }
-
-  match.jogador2 = interaction.user.id;
-  matches[matchId].status = "pronto";
-  salvarMatches(matches);
-
-  const guild = interaction.guild || (await interaction.client.guilds.fetch(process.env.GUILD_ID));
-  await criarCanalPrivadoX1(guild, matchId, match.tipo === "apostado");
-
-  return interaction.reply({
-    content: `✅ <@${interaction.user.id}> entrou no X1! Canal privado criado.`,
-    ephemeral: false,
-  });
 }
 
 async function criarCanalPrivadoX1(guild, matchId, isApostado = false) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
+  try {
+    const matches = carregarMatches();
+    const match = matches[matchId];
 
-  if (!match) return null;
+    if (!match) return null;
 
-  const permissoes = [
-    {
-      id: match.criador,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-    },
-    {
-      id: match.jogador2,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-    },
-    {
-      id: STAFF.OWNER,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-    },
-    {
-      id: STAFF.STAFF,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-    },
-    {
-      id: guild.id,
-      deny: [PermissionFlagsBits.ViewChannel],
-    },
-  ];
+    const permissoes = [
+      {
+        id: match.criador,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+      },
+      {
+        id: match.jogador2,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+      },
+      {
+        id: STAFF.OWNER,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
+      },
+      {
+        id: STAFF.STAFF,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
+      },
+      {
+        id: guild.id,
+        deny: [PermissionFlagsBits.ViewChannel],
+      },
+    ];
 
-  const canal = await guild.channels.create({
-    name: `${isApostado ? "apostado" : "x1"}-${match.criador.substring(0, 5)}`,
-    type: ChannelType.GuildText,
-    permissionOverwrites: permissoes,
-  });
+    const canal = await guild.channels.create({
+      name: `${isApostado ? "apostado" : "x1"}-${match.criador.substring(0, 5)}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: permissoes,
+    });
 
-  const embed = new EmbedBuilder()
-    .setTitle(isApostado ? "🎰 X1 Apostado" : "🎮 X1")
-    .addFields(
-      { name: "Mapa", value: match.mapa },
-      { name: "AD1", value: `<@${match.criador}>`, inline: true },
-      { name: "AD2", value: `<@${match.jogador2}>`, inline: true },
-      isApostado ? { name: "Valor", value: `R$ ${match.valor}` } : null
-    )
-    .setColor(isApostado ? 16753920 : 3066993);
+    const titulo = isApostado ? `${EMOTES.BET} X1 Apostado` : `${EMOTES.PLAY} X1`;
+    const embed = new EmbedBuilder()
+      .setTitle(titulo)
+      .addFields(
+        { name: `${EMOTES.INFO} Mapa`, value: match.mapa },
+        { name: `${EMOTES.VS} AD1`, value: `<@${match.criador}>`, inline: true },
+        { name: `${EMOTES.VS} AD2`, value: `<@${match.jogador2}>`, inline: true },
+        isApostado ? { name: `${EMOTES.BET} Valor`, value: `R$ ${match.valor}` } : null
+      )
+      .setColor(isApostado ? 16753920 : 3066993);
 
-  const botoes = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`x1_vencedor_ad1_${matchId}`)
-      .setLabel("AD1 Venceu")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`x1_vencedor_ad2_${matchId}`)
-      .setLabel("AD2 Venceu")
-      .setStyle(ButtonStyle.Danger)
-  );
+    const botoes = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`x1_vencedor_ad1_${matchId}`)
+        .setLabel(`${EMOTES.WIN} AD1 Venceu`)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`x1_vencedor_ad2_${matchId}`)
+        .setLabel(`${EMOTES.WIN} AD2 Venceu`)
+        .setStyle(ButtonStyle.Danger)
+    );
 
-  await canal.send({ embeds: [embed], components: [botoes] });
+    await canal.send({ embeds: [embed], components: [botoes] });
 
-  matches[matchId].canalPrivado = canal.id;
-  salvarMatches(matches);
+    matches[matchId].canalPrivado = canal.id;
+    salvarMatches(matches);
 
-  return canal;
+    return canal;
+  } catch (error) {
+    console.error("Erro ao criar canal privado X1:", error);
+  }
 }
 
 async function finalizarX1(interaction, matchId, vencedorAd) {
-  const matches = carregarMatches();
-  const match = matches[matchId];
+  try {
+    const matches = carregarMatches();
+    const match = matches[matchId];
 
-  if (!match) return;
+    if (!match) return;
 
-  // Verificar se é Staff/Dono
-  if (!STAFF.IDS.includes(interaction.user.id)) {
+    if (!STAFF.IDS.includes(interaction.user.id)) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Apenas Staff/Dono pode declarar vencedor.`,
+        ephemeral: true,
+      });
+    }
+
+    const vencedorId = vencedorAd === 1 ? match.criador : match.jogador2;
+    const perdedorId = vencedorAd === 1 ? match.jogador2 : match.criador;
+
+    const canalOrigem = await interaction.guild.channels.fetch(match.canalOrigem || CHANNELS.X1);
+    const embed = new EmbedBuilder()
+      .setTitle(`${EMOTES.WIN} Resultado`)
+      .setDescription(`<@${vencedorId}> venceu contra <@${perdedorId}>`)
+      .addFields({ name: "Mapa", value: match.mapa });
+
+    if (match.tipo === "apostado") {
+      embed.addFields({ name: `${EMOTES.BET} Ganho`, value: `<@${vencedorId}> ganhou R$ ${match.valor}` });
+    }
+
+    embed.setColor(5763719);
+
+    if (canalOrigem) {
+      await canalOrigem.send({ embeds: [embed] });
+    }
+
+    const canalPrivado = await interaction.guild.channels.fetch(match.canalPrivado);
+    if (canalPrivado) {
+      await canalPrivado.delete();
+    }
+
+    delete matches[matchId];
+    salvarMatches(matches);
+
     return interaction.reply({
-      content: "Apenas Staff/Dono pode declarar vencedor.",
+      content: `${EMOTES.CHECK} Match finalizado e canal removido.`,
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error("Erro ao finalizar X1:", error);
+    return interaction.reply({
+      content: `${EMOTES.EXIT} Erro ao finalizar. Tente novamente.`,
       ephemeral: true,
     });
   }
-
-  const vencedorId = vencedorAd === 1 ? match.criador : match.jogador2;
-  const perdedorId = vencedorAd === 1 ? match.jogador2 : match.criador;
-
-  // Enviar mensagem no canal original
-  const canalOrigem = await interaction.guild.channels.fetch(match.canalOrigem || CHANNELS.X1);
-  const embed = new EmbedBuilder()
-    .setTitle("🏆 Resultado")
-    .setDescription(`<@${vencedorId}> venceu contra <@${perdedorId}>`)
-    .addFields({ name: "Mapa", value: match.mapa });
-
-  if (match.tipo === "apostado") {
-    embed.addFields({ name: "Ganho", value: `<@${vencedorId}> ganhou R$ ${match.valor}` });
-  }
-
-  embed.setColor(5763719);
-
-  if (canalOrigem) {
-    await canalOrigem.send({ embeds: [embed] });
-  }
-
-  // Deletar canal privado
-  const canalPrivado = await interaction.guild.channels.fetch(match.canalPrivado);
-  if (canalPrivado) {
-    await canalPrivado.delete();
-  }
-
-  delete matches[matchId];
-  salvarMatches(matches);
-
-  return interaction.reply({
-    content: "✅ Match finalizado e canal removido.",
-    ephemeral: true,
-  });
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -623,7 +508,7 @@ async function finalizarX1(interaction, matchId, vencedorAd) {
 // ═════════════════════════════════════════════════════════════════════
 
 async function criarSimu(interaction) {
-  const { user, member, guild, channelId } = interaction;
+  const { user, member, channelId } = interaction;
 
   if (channelId !== CHANNELS.SIMU) {
     return interaction.reply({
@@ -634,7 +519,7 @@ async function criarSimu(interaction) {
 
   if (!member.roles.cache.has(ROLES.SIMU_PERMITIDO) && !STAFF.IDS.includes(user.id)) {
     return interaction.reply({
-      content: "Você não tem permissão para criar Simu.",
+      content: `${EMOTES.EXIT} Você não tem permissão para criar Simu.`,
       ephemeral: true,
     });
   }
@@ -692,86 +577,95 @@ async function criarSimu(interaction) {
 }
 
 async function processarSimuModal(interaction) {
-  const { user, guild } = interaction;
-  const organizador = interaction.fields.getTextInputValue("organizador");
-  const jogo = interaction.fields.getTextInputValue("jogo");
-  const versao = interaction.fields.getTextInputValue("versao");
-  const mapa = interaction.fields.getTextInputValue("mapa");
-  const tipoJogo = interaction.fields.getTextInputValue("tipo_jogo");
-  const qtdParticipantes = parseInt(interaction.fields.getTextInputValue("qtd_participantes"));
+  try {
+    const { user, guild } = interaction;
+    const organizador = interaction.fields.getTextInputValue("organizador");
+    const jogo = interaction.fields.getTextInputValue("jogo");
+    const versao = interaction.fields.getTextInputValue("versao");
+    const mapa = interaction.fields.getTextInputValue("mapa");
+    const tipoJogo = interaction.fields.getTextInputValue("tipo_jogo");
+    const qtdParticipantes = parseInt(interaction.fields.getTextInputValue("qtd_participantes"));
 
-  const tournamentId = criarTournamentId();
-  const tournaments = carregarTournaments();
+    const tournamentId = criarTournamentId();
+    const tournaments = carregarTournaments();
 
-  tournaments[tournamentId] = {
-    organizador,
-    jogo,
-    versao,
-    mapa,
-    tipoJogo,
-    qtdParticipantes,
-    criador: user.id,
-    times: {},
-    canais: [],
-    bracket: [],
-    faseAtual: "oitavas",
-    status: "inscricao",
-    criadoEm: new Date().toISOString(),
-  };
+    tournaments[tournamentId] = {
+      organizador,
+      jogo,
+      versao,
+      mapa,
+      tipoJogo,
+      qtdParticipantes,
+      criador: user.id,
+      times: {},
+      canais: [],
+      bracket: [],
+      faseAtual: "oitavas",
+      status: "inscricao",
+      criadoEm: new Date().toISOString(),
+    };
 
-  salvarTournaments(tournaments);
+    salvarTournaments(tournaments);
 
-  // Criar canais dos times
-  const qtdTimes = calcularQtdTimes(qtdParticipantes, tipoJogo);
-  const canais = [];
+    const qtdTimes = calcularQtdTimes(qtdParticipantes, tipoJogo);
+    const canais = [];
 
-  for (let i = 1; i <= qtdTimes; i++) {
-    const canal = await guild.channels.create({
-      name: `time-${i}-${tournamentId.substring(0, 5)}`,
-      type: ChannelType.GuildText,
-    });
+    for (let i = 1; i <= qtdTimes; i++) {
+      const canal = await guild.channels.create({
+        name: `time-${i}-${tournamentId.substring(0, 5)}`,
+        type: ChannelType.GuildText,
+      });
+
+      const embed = new EmbedBuilder()
+        .setTitle(`${EMOTES.TEAM} Time ${i}`)
+        .setDescription(`${tournamentId}\n\n${EMOTES.ENTER} Clique em Entrar para se juntar ao time ${i}`)
+        .setColor(3066993);
+
+      const botoes = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`simu_entrar_${tournamentId}_${i}`)
+          .setLabel(`${EMOTES.ENTER} Entrar`)
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`simu_sair_${tournamentId}_${i}`)
+          .setLabel(`${EMOTES.EXIT} Sair`)
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`simu_trocar_${tournamentId}_${i}`)
+          .setLabel(`${EMOTES.VS} Trocar Time`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await canal.send({ embeds: [embed], components: [botoes] });
+      canais.push(canal.id);
+
+      tournaments[tournamentId].times[i] = [];
+    }
+
+    tournaments[tournamentId].canais = canais;
+    salvarTournaments(tournaments);
 
     const embed = new EmbedBuilder()
-      .setTitle(`⚽ Time ${i}`)
-      .setDescription(`${tournamentId}\n\nClique em Entrar para se juntar ao time ${i}`)
-      .setColor(3066993);
+      .setTitle(`${EMOTES.CHECK} Simu Criada`)
+      .setDescription(`Simu "${organizador}" criada com sucesso!`)
+      .addFields(
+        { name: `${EMOTES.PLAY} Jogo`, value: jogo },
+        { name: `${EMOTES.INFO} Versão`, value: versao },
+        { name: `${EMOTES.INFO} Mapa`, value: mapa },
+        { name: `${EMOTES.VS} Tipo`, value: tipoJogo },
+        { name: `${EMOTES.BRACKET} Participantes`, value: `${0}/${qtdParticipantes}` },
+        { name: `${EMOTES.INFO} ID`, value: tournamentId, inline: false }
+      )
+      .setColor(5763719);
 
-    const botoes = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`simu_entrar_${tournamentId}_${i}`)
-        .setLabel("Entrar")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`simu_sair_${tournamentId}_${i}`)
-        .setLabel("Sair")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(`simu_trocar_${tournamentId}_${i}`)
-        .setLabel("Trocar de Time")
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    await canal.send({ embeds: [embed], components: [botoes] });
-    canais.push(canal.id);
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  } catch (error) {
+    console.error("Erro ao processar Simu modal:", error);
+    return interaction.reply({
+      content: `${EMOTES.EXIT} Erro ao criar Simu. Tente novamente.`,
+      ephemeral: true,
+    });
   }
-
-  tournaments[tournamentId].canais = canais;
-  salvarTournaments(tournaments);
-
-  const embed = new EmbedBuilder()
-    .setTitle("✅ Simu Criada")
-    .setDescription(`Simu "${organizador}" criada com sucesso!`)
-    .addFields(
-      { name: "Jogo", value: jogo },
-      { name: "Versão", value: versao },
-      { name: "Mapa", value: mapa },
-      { name: "Tipo", value: tipoJogo },
-      { name: "Participantes", value: String(qtdParticipantes) },
-      { name: "ID", value: tournamentId, inline: false }
-    )
-    .setColor(5763719);
-
-  return interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 function calcularQtdTimes(qtdParticipantes, tipoJogo) {
@@ -780,9 +674,6 @@ function calcularQtdTimes(qtdParticipantes, tipoJogo) {
 }
 
 function verificarSimuCompleta(tournament) {
-  /**
-   * Verifica se todos os times estão completos
-   */
   const tamanhoTime = parseInt(tournament.tipoJogo[0]);
   for (const [idx, players] of Object.entries(tournament.times)) {
     if (!players || players.length < tamanhoTime) {
@@ -793,252 +684,247 @@ function verificarSimuCompleta(tournament) {
 }
 
 async function iniciarBracketAutomatico(guild, tournamentId) {
-  /**
-   * Inicia o bracket automaticamente quando a simu enche
-   */
-  const tournaments = carregarTournaments();
-  const tournament = tournaments[tournamentId];
+  try {
+    const tournaments = carregarTournaments();
+    const tournament = tournaments[tournamentId];
 
-  if (!tournament) {
-    return;
-  }
+    if (!tournament) {
+      return;
+    }
 
-  // Gerar bracket automático
-  const bracket = gerarBracketAutomatico(tournament.times, tournament.tipoJogo);
-  tournament.bracket = bracket;
-  tournament.status = "bracket";
-  tournament.faseAtual = "oitavas";
-  salvarTournaments(tournaments);
+    const bracket = gerarBracketAutomatico(tournament.times, tournament.tipoJogo);
+    tournament.bracket = bracket;
+    tournament.status = "bracket";
+    tournament.faseAtual = "oitavas";
+    salvarTournaments(tournaments);
 
-  // Criar canais das partidas
-  for (const match of bracket) {
-    await criarCanalPartida(guild, match.matchId, match.time1, match.time2, tournament, match.fase);
-  }
+    for (const match of bracket) {
+      await criarCanalPartida(guild, match.matchId, match.time1, match.time2, tournament, match.fase);
+    }
 
-  // Enviar mensagem de bracket gerado no canal de Simu
-  const simuChannel = await guild.channels.fetch(CHANNELS.SIMU);
-  if (simuChannel) {
-    const embedBracket = new EmbedBuilder()
-      .setTitle(`🏆 Bracket Gerado - ${tournament.organizador}`)
-      .setDescription(`Total de ${bracket.length} partidas na fase de oitavas\n\n⚔️ **PARTIDAS:**`)
-      .setColor(10181046);
+    const simuChannel = await guild.channels.fetch(CHANNELS.SIMU);
+    if (simuChannel) {
+      const embedBracket = new EmbedBuilder()
+        .setTitle(`${EMOTES.BRACKET} Bracket Gerado - ${tournament.organizador}`)
+        .setDescription(`Total de ${bracket.length} partidas na fase de oitavas\n\n${EMOTES.VS} **PARTIDAS:**`)
+        .setColor(10181046);
 
-    bracket.forEach((match, idx) => {
-      const time1 = match.time1.players.map((id) => `<@${id}>`).join(", ");
-      const time2 = match.time2.players.map((id) => `<@${id}>`).join(", ");
-      embedBracket.addFields({
-        name: `Partida ${idx + 1}`,
-        value: `${time1} vs ${time2}`,
-        inline: false,
+      bracket.forEach((match, idx) => {
+        const time1 = match.time1.players.map((id) => `<@${id}>`).join(", ");
+        const time2 = match.time2.players.map((id) => `<@${id}>`).join(", ");
+        embedBracket.addFields({
+          name: `Partida ${idx + 1}`,
+          value: `${time1} ${EMOTES.VS} ${time2}`,
+          inline: false,
+        });
       });
-    });
 
-    await simuChannel.send({ embeds: [embedBracket] });
+      await simuChannel.send({ embeds: [embedBracket] });
+    }
+  } catch (error) {
+    console.error("Erro ao iniciar bracket:", error);
   }
 }
 
 async function criarCanalPartida(guild, matchId, time1, time2, tournament, fase = "oitavas") {
-  const permissoes = [
-    ...time1.players.map((id) => ({
-      id,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-    })),
-    ...time2.players.map((id) => ({
-      id,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-    })),
-    {
-      id: STAFF.OWNER,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-    },
-    {
-      id: STAFF.STAFF,
-      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-    },
-    {
-      id: guild.id,
-      deny: [PermissionFlagsBits.ViewChannel],
-    },
-  ];
+  try {
+    const permissoes = [
+      ...time1.players.map((id) => ({
+        id,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+      })),
+      ...time2.players.map((id) => ({
+        id,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+      })),
+      {
+        id: STAFF.OWNER,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
+      },
+      {
+        id: STAFF.STAFF,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
+      },
+      {
+        id: guild.id,
+        deny: [PermissionFlagsBits.ViewChannel],
+      },
+    ];
 
-  const canal = await guild.channels.create({
-    name: `${fase}-${matchId.substring(0, 8)}`,
-    type: ChannelType.GuildText,
-    permissionOverwrites: permissoes,
-  });
+    const canal = await guild.channels.create({
+      name: `${fase}-${matchId.substring(0, 8)}`,
+      type: ChannelType.GuildText,
+      permissionOverwrites: permissoes,
+    });
 
-  const time1Str = time1.players.map((id) => `<@${id}>`).join(", ");
-  const time2Str = time2.players.map((id) => `<@${id}>`).join(", ");
+    const time1Str = time1.players.map((id) => `<@${id}>`).join(", ");
+    const time2Str = time2.players.map((id) => `<@${id}>`).join(", ");
 
-  const embed = new EmbedBuilder()
-    .setTitle(`🎮 ${fase.toUpperCase()} - Partida`)
-    .addFields(
-      { name: "Time 1", value: time1Str || "Vazio" },
-      { name: "Time 2", value: time2Str || "Vazio" },
-      { name: "Mapa", value: tournament.mapa }
-    )
-    .setColor(3066993);
+    const embed = new EmbedBuilder()
+      .setTitle(`${EMOTES.PLAY} ${fase.toUpperCase()} - Partida`)
+      .addFields(
+        { name: `${EMOTES.TEAM} Time 1`, value: time1Str || "Vazio" },
+        { name: `${EMOTES.TEAM} Time 2`, value: time2Str || "Vazio" },
+        { name: `${EMOTES.INFO} Mapa`, value: tournament.mapa }
+      )
+      .setColor(3066993);
 
-  const botoes = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`simu_vencedor_1_${matchId}`)
-      .setLabel("Time 1 Venceu")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`simu_vencedor_2_${matchId}`)
-      .setLabel("Time 2 Venceu")
-      .setStyle(ButtonStyle.Danger)
-  );
+    const botoes = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`simu_vencedor_1_${matchId}`)
+        .setLabel(`${EMOTES.WIN} Time 1 Venceu`)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`simu_vencedor_2_${matchId}`)
+        .setLabel(`${EMOTES.WIN} Time 2 Venceu`)
+        .setStyle(ButtonStyle.Danger)
+    );
 
-  const msg = await canal.send({ embeds: [embed], components: [botoes] });
+    await canal.send({ embeds: [embed], components: [botoes] });
 
-  // Salvar informação da partida
-  const matches = carregarMatches();
-  matches[matchId] = {
-    tipo: "simu",
-    tournamentId: tournament.organizador,
-    time1: time1.players,
-    time2: time2.players,
-    status: "pendente",
-    canalPartida: canal.id,
-    criadoEm: new Date().toISOString(),
-  };
-  salvarMatches(matches);
+    const matches = carregarMatches();
+    matches[matchId] = {
+      tipo: "simu",
+      tournamentId: tournamentId,
+      time1: time1.players,
+      time2: time2.players,
+      status: "pendente",
+      canalPartida: canal.id,
+      fase: fase,
+      criadoEm: new Date().toISOString(),
+    };
+    salvarMatches(matches);
 
-  return canal;
+    return canal;
+  } catch (error) {
+    console.error("Erro ao criar canal partida:", error);
+  }
 }
 
 async function finalizarPartidaSimu(interaction, matchId, timeVencedor) {
-  const matches = carregarMatches();
-  const tournaments = carregarTournaments();
+  try {
+    const matches = carregarMatches();
+    const tournaments = carregarTournaments();
 
-  if (!matches[matchId]) {
-    return interaction.reply({ content: "Match não encontrado.", ephemeral: true });
-  }
+    if (!matches[matchId]) {
+      return interaction.reply({ content: `${EMOTES.EXIT} Match não encontrado.`, ephemeral: true });
+    }
 
-  // Verificar Staff
-  if (!STAFF.IDS.includes(interaction.user.id)) {
+    if (!STAFF.IDS.includes(interaction.user.id)) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Apenas Staff/Dono pode declarar vencedor.`,
+        ephemeral: true,
+      });
+    }
+
+    const match = matches[matchId];
+
+    let tournament = null;
+    let tournamentId = null;
+    for (const [tId, t] of Object.entries(tournaments)) {
+      if (t.bracket.some((b) => b.matchId === matchId)) {
+        tournament = t;
+        tournamentId = tId;
+        break;
+      }
+    }
+
+    if (!tournament) {
+      return interaction.reply({ content: `${EMOTES.EXIT} Torneio não encontrado.`, ephemeral: true });
+    }
+
+    let bracketMatch = tournament.bracket.find((m) => m.matchId === matchId);
+
+    if (!bracketMatch) {
+      return interaction.reply({ content: `${EMOTES.EXIT} Partida não encontrada no bracket.`, ephemeral: true });
+    }
+
+    bracketMatch.vencedor = timeVencedor === 1 ? bracketMatch.time1 : bracketMatch.time2;
+    bracketMatch.status = "finalizada";
+
+    const vencedorIds = bracketMatch.vencedor.players;
+    const timePerded = timeVencedor === 1 ? bracketMatch.time2 : bracketMatch.time1;
+    const viceIds = timePerded.players;
+
+    atualizarRanking(vencedorIds, viceIds);
+
+    const partidasNaFase = tournament.bracket.filter((m) => m.fase === tournament.faseAtual);
+    const partidasFinalizadas = partidasNaFase.filter((m) => m.status === "finalizada");
+
+    let mensagemResultado = `${EMOTES.WIN} Time ${timeVencedor} venceu!\n\n`;
+    mensagemResultado += `**Vencedores:** ${vencedorIds.map((id) => `<@${id}>`).join(", ")}\n`;
+    mensagemResultado += `**Vice:** ${viceIds.map((id) => `<@${id}>`).join(", ")}`;
+
+    if (partidasFinalizadas.length === partidasNaFase.length) {
+      mensagemResultado += `\n\n${EMOTES.CHECK} Fase de ${tournament.faseAtual} concluída!`;
+
+      if (partidasNaFase.length === 1 && tournament.faseAtual === "final") {
+        mensagemResultado += `\n🎉 **${tournament.organizador}** finalizado!`;
+        tournament.status = "finalizado";
+
+        const embedFinal = new EmbedBuilder()
+          .setTitle(`${EMOTES.WIN} Campeões - ${tournament.organizador}`)
+          .setDescription(`**Vencedores:**\n${vencedorIds.map((id) => `<@${id}>`).join("\n")}`)
+          .addFields({
+            name: "Vice-Campeões",
+            value: viceIds.map((id) => `<@${id}>`).join("\n"),
+          })
+          .setColor(10181046);
+
+        const simuChannel = await interaction.guild.channels.fetch(CHANNELS.SIMU);
+        if (simuChannel) {
+          await simuChannel.send({ embeds: [embedFinal] });
+        }
+      } else if (partidasFinalizadas.length === partidasNaFase.length) {
+        const proximaFase = obterProximaFase(tournament.faseAtual);
+        const vencedoresOrdenados = partidasNaFase.filter((m) => m.vencedor).map((m) => m.vencedor);
+
+        const novoBracket = gerarProximaFase(vencedoresOrdenados);
+
+        tournament.faseAtual = proximaFase;
+        novoBracket.forEach((match) => {
+          match.fase = proximaFase;
+          match.status = "pendente";
+          tournament.bracket.push(match);
+        });
+
+        mensagemResultado += `\n\n➡️ Próxima fase: **${proximaFase}**\nPartidas: ${novoBracket.length}`;
+
+        for (const match of novoBracket) {
+          await criarCanalPartida(
+            interaction.guild,
+            match.matchId,
+            match.time1,
+            match.time2,
+            tournament,
+            proximaFase
+          );
+        }
+      }
+    }
+
+    salvarTournaments(tournaments);
+
+    try {
+      const canal = await interaction.guild.channels.fetch(interaction.channelId);
+      if (canal) {
+        await canal.delete();
+      }
+    } catch (error) {
+      console.error("Erro ao deletar canal:", error);
+    }
+
     return interaction.reply({
-      content: "Apenas Staff/Dono pode declarar vencedor.",
+      content: mensagemResultado,
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error("Erro ao finalizar partida:", error);
+    return interaction.reply({
+      content: `${EMOTES.EXIT} Erro ao finalizar. Tente novamente.`,
       ephemeral: true,
     });
   }
-
-  const match = matches[matchId];
-
-  // Encontrar o torneio
-  let tournament = null;
-  let tournamentId = null;
-  for (const [tId, t] of Object.entries(tournaments)) {
-    if (t.bracket.some((b) => b.matchId === matchId)) {
-      tournament = t;
-      tournamentId = tId;
-      break;
-    }
-  }
-
-  if (!tournament) {
-    return interaction.reply({ content: "Torneio não encontrado.", ephemeral: true });
-  }
-
-  // Encontrar a partida no bracket
-  let bracketMatch = tournament.bracket.find((m) => m.matchId === matchId);
-
-  if (!bracketMatch) {
-    return interaction.reply({ content: "Partida não encontrada no bracket.", ephemeral: true });
-  }
-
-  // Definir vencedor
-  bracketMatch.vencedor = timeVencedor === 1 ? bracketMatch.time1 : bracketMatch.time2;
-  bracketMatch.status = "finalizada";
-
-  // Atualizar ranking
-  const vencedorIds = bracketMatch.vencedor.players;
-  const timePerded = timeVencedor === 1 ? bracketMatch.time2 : bracketMatch.time1;
-  const viceIds = timePerded.players;
-
-  atualizarRanking(vencedorIds, viceIds);
-
-  // Verificar se fase foi concluída
-  const partidasNaFase = tournament.bracket.filter((m) => m.fase === tournament.faseAtual);
-  const partidasFinalizadas = partidasNaFase.filter((m) => m.status === "finalizada");
-
-  let mensagemResultado = `🏆 Time ${timeVencedor} venceu!\n\n`;
-  mensagemResultado += `**Vencedores:** ${vencedorIds.map((id) => `<@${id}>`).join(", ")}\n`;
-  mensagemResultado += `**Vice:** ${viceIds.map((id) => `<@${id}>`).join(", ")}`;
-
-  if (partidasFinalizadas.length === partidasNaFase.length) {
-    // Fase concluída
-    mensagemResultado += `\n\n✅ Fase de ${tournament.faseAtual} concluída!`;
-
-    if (partidasNaFase.length === 1 && tournament.faseAtual === "final") {
-      // Torneio finalizado
-      mensagemResultado += `\n🎉 **${tournament.organizador}** finalizado!`;
-      tournament.status = "finalizado";
-
-      // Criar embed com resultado final
-      const embedFinal = new EmbedBuilder()
-        .setTitle(`🏆 Campeões - ${tournament.organizador}`)
-        .setDescription(
-          `**Vencedores:**\n${vencedorIds.map((id) => `<@${id}>`).join("\n")}`
-        )
-        .addFields({
-          name: "Vice-Campeões",
-          value: viceIds.map((id) => `<@${id}>`).join("\n"),
-        })
-        .setColor(10181046);
-
-      const simuChannel = await interaction.guild.channels.fetch(CHANNELS.SIMU);
-      if (simuChannel) {
-        await simuChannel.send({ embeds: [embedFinal] });
-      }
-    } else if (partidasFinalizadas.length === partidasNaFase.length) {
-      // Gerar próxima fase
-      const proximaFase = obterProximaFase(tournament.faseAtual);
-      const vencedoresOrdenados = partidasNaFase.filter((m) => m.vencedor).map((m) => m.vencedor);
-
-      const novoBracket = gerarProximaFase(vencedoresOrdenados, tournament.tipoJogo);
-
-      // Adicionar fase
-      tournament.faseAtual = proximaFase;
-      novoBracket.forEach((match) => {
-        match.fase = proximaFase;
-        match.status = "pendente";
-        tournament.bracket.push(match);
-      });
-
-      mensagemResultado += `\n\n➡️ Próxima fase: **${proximaFase}**\nPartidas: ${novoBracket.length}`;
-
-      // Criar canais da próxima fase
-      for (const match of novoBracket) {
-        await criarCanalPartida(
-          interaction.guild,
-          match.matchId,
-          match.time1,
-          match.time2,
-          tournament,
-          proximaFase
-        );
-      }
-    }
-  }
-
-  salvarTournaments(tournaments);
-
-  // Deletar canal da partida
-  try {
-    const canal = await interaction.guild.channels.fetch(interaction.channelId);
-    if (canal) {
-      await canal.delete();
-    }
-  } catch (error) {
-    console.error("Erro ao deletar canal:", error);
-  }
-
-  return interaction.reply({
-    content: mensagemResultado,
-    ephemeral: true,
-  });
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -1079,7 +965,6 @@ client.once("ready", () => {
 // ═════════════════════════════════════════════════════════════════════
 
 client.on("interactionCreate", async (interaction) => {
-  // ───────── SLASH COMMANDS ─────────
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
 
@@ -1143,7 +1028,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ───────── MODAL SUBMIT ─────────
   if (interaction.isModalSubmit()) {
     if (interaction.customId === "modal_parceria") {
       const nome = interaction.fields.getTextInputValue("nome_cla");
@@ -1168,59 +1052,24 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    // X1 / Apostado Modal
     if (interaction.customId.startsWith("modal_x1_") || interaction.customId.startsWith("modal_apostado_")) {
       const isApostado = interaction.customId.startsWith("modal_apostado_");
       return processarX1Modal(interaction, isApostado);
     }
 
-    // X1 Mencionar
-    if (interaction.customId.startsWith("modal_x1_mencionar_")) {
-      const matchId = interaction.customId.replace("modal_x1_mencionar_", "");
-      return processarMencaoX1(interaction, matchId);
-    }
-
-    // Simu Modal
     if (interaction.customId.startsWith("modal_simu_")) {
       return processarSimuModal(interaction);
     }
   }
 
-  // ───────── BUTTON INTERACTIONS ─────────
   if (interaction.isButton()) {
     const { customId, user, guild } = interaction;
 
-    // X1 SIM
-    if (customId.startsWith("x1_sim_")) {
-      const matchId = customId.replace("x1_sim_", "");
-      return handleX1Sim(interaction, matchId);
-    }
-
-    // X1 NÃO
-    if (customId.startsWith("x1_nao_")) {
-      const matchId = customId.replace("x1_nao_", "");
-      return handleX1Nao(interaction, matchId);
-    }
-
-    // X1 Entrar
     if (customId.startsWith("x1_entrar_")) {
       const matchId = customId.replace("x1_entrar_", "");
       return handleX1Entrar(interaction, matchId);
     }
 
-    // X1 Aceitar
-    if (customId.startsWith("x1_aceitar_")) {
-      const matchId = customId.replace("x1_aceitar_", "");
-      return handleX1Aceitar(interaction, matchId);
-    }
-
-    // X1 Recusar
-    if (customId.startsWith("x1_recusar_")) {
-      const matchId = customId.replace("x1_recusar_", "");
-      return handleX1Recusar(interaction, matchId);
-    }
-
-    // X1 Declarar Vencedor
     if (customId.startsWith("x1_vencedor_")) {
       const parts = customId.split("_");
       const vencedorAd = parts[2] === "ad1" ? 1 : 2;
@@ -1228,14 +1077,13 @@ client.on("interactionCreate", async (interaction) => {
       return finalizarX1(interaction, matchId, vencedorAd);
     }
 
-    // Simu Entrar Time
     if (customId.startsWith("simu_entrar_")) {
       const [, , tournamentId, timeIndex] = customId.split("_");
       const tournaments = carregarTournaments();
       const tournament = tournaments[tournamentId];
 
       if (!tournament) {
-        return interaction.reply({ content: "Simu não encontrada.", ephemeral: true });
+        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
       }
 
       if (!tournament.times[timeIndex]) {
@@ -1245,42 +1093,39 @@ client.on("interactionCreate", async (interaction) => {
       const tamanhoTime = parseInt(tournament.tipoJogo[0]);
       if (tournament.times[timeIndex].length >= tamanhoTime) {
         return interaction.reply({
-          content: "Este time está cheio. Escolha outro time.",
+          content: `${EMOTES.EXIT} Este time está cheio. Escolha outro time.`,
           ephemeral: true,
         });
       }
 
       if (tournament.times[timeIndex].includes(user.id)) {
         return interaction.reply({
-          content: "Você já está neste time.",
+          content: `${EMOTES.EXIT} Você já está neste time.`,
           ephemeral: true,
         });
       }
 
       tournament.times[timeIndex].push(user.id);
 
-      // VERIFICAR SE SIMU ESTÁ COMPLETA
       if (verificarSimuCompleta(tournament)) {
-        // Iniciar bracket automaticamente
         await iniciarBracketAutomatico(guild, tournamentId);
       }
 
       salvarTournaments(tournaments);
 
       return interaction.reply({
-        content: `✅ <@${user.id}> entrou no Time ${timeIndex}!`,
+        content: `${EMOTES.CHECK} <@${user.id}> entrou no Time ${timeIndex}!`,
         ephemeral: true,
       });
     }
 
-    // Simu Sair Time
     if (customId.startsWith("simu_sair_")) {
       const [, , tournamentId, timeIndex] = customId.split("_");
       const tournaments = carregarTournaments();
       const tournament = tournaments[tournamentId];
 
       if (!tournament) {
-        return interaction.reply({ content: "Simu não encontrada.", ephemeral: true });
+        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
       }
 
       if (tournament.times[timeIndex]) {
@@ -1289,29 +1134,27 @@ client.on("interactionCreate", async (interaction) => {
           tournament.times[timeIndex].splice(idx, 1);
           salvarTournaments(tournaments);
           return interaction.reply({
-            content: `✅ <@${user.id}> saiu do Time ${timeIndex}!`,
+            content: `${EMOTES.CHECK} <@${user.id}> saiu do Time ${timeIndex}!`,
             ephemeral: true,
           });
         }
       }
 
       return interaction.reply({
-        content: "Você não está neste time.",
+        content: `${EMOTES.EXIT} Você não está neste time.`,
         ephemeral: true,
       });
     }
 
-    // Simu Trocar Time
     if (customId.startsWith("simu_trocar_")) {
-      const [, , tournamentId, timeAtual] = customId.split("_");
+      const [, , tournamentId] = customId.split("_");
       const tournaments = carregarTournaments();
       const tournament = tournaments[tournamentId];
 
       if (!tournament) {
-        return interaction.reply({ content: "Simu não encontrada.", ephemeral: true });
+        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
       }
 
-      // Remove do time atual
       for (let i = 1; i <= Object.keys(tournament.times).length; i++) {
         if (tournament.times[i] && tournament.times[i].includes(user.id)) {
           tournament.times[i] = tournament.times[i].filter((id) => id !== user.id);
@@ -1319,7 +1162,6 @@ client.on("interactionCreate", async (interaction) => {
         }
       }
 
-      // Cria select para escolher novo time
       const options = [];
       for (let i = 1; i <= Object.keys(tournament.times).length; i++) {
         const tamanhoTime = parseInt(tournament.tipoJogo[0]);
@@ -1345,7 +1187,6 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    // Simu Vencedor Partida
     if (customId.startsWith("simu_vencedor_")) {
       const parts = customId.split("_");
       const timeVencedor = parts[2];
@@ -1355,7 +1196,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ───────── SELECT MENU ─────────
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId.startsWith("simu_select_time_")) {
       const tournamentId = interaction.customId.replace("simu_select_time_", "");
@@ -1366,7 +1206,7 @@ client.on("interactionCreate", async (interaction) => {
       const tournament = tournaments[tournamentId];
 
       if (!tournament) {
-        return interaction.reply({ content: "Simu não encontrada.", ephemeral: true });
+        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
       }
 
       if (!tournament.times[novoTimeIndex]) {
@@ -1375,24 +1215,18 @@ client.on("interactionCreate", async (interaction) => {
 
       tournament.times[novoTimeIndex].push(interaction.user.id);
 
-      // VERIFICAR SE SIMU ESTÁ COMPLETA
       if (verificarSimuCompleta(tournament)) {
-        // Iniciar bracket automaticamente
         await iniciarBracketAutomatico(interaction.guild, tournamentId);
       }
 
       salvarTournaments(tournaments);
 
       return interaction.reply({
-        content: `✅ Você se mudou para o Time ${novoTimeIndex}!`,
+        content: `${EMOTES.CHECK} Você se mudou para o Time ${novoTimeIndex}!`,
         ephemeral: true,
       });
     }
   }
 });
-
-// ═════════════════════════════════════════════════════════════════════
-// ========================= LOGIN =====================================
-// ═════════════════════════════════════════════════════════════════════
 
 client.login(process.env.TOKEN);
