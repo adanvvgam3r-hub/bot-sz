@@ -1,134 +1,204 @@
 require("dotenv").config();
-const fs = require("fs");
 const {
-  Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, 
-  ButtonBuilder, ButtonStyle, ActionRowBuilder, ChannelType, PermissionFlagsBits
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder
 } = require("discord.js");
 
-const client = new Client({ 
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] 
+// Criando o client
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+
+// Comandos a registrar
+const commands = [
+  new SlashCommandBuilder()
+    .setName("parceria")
+    .setDescription("Criar parceria com modal")
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("xcla")
+    .setDescription("Registrar resultado de X-Clã")
+    .toJSON()
+];
+
+// REST para registrar comandos na guild
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
+(async () => {
+  try {
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body: commands }
+    );
+    console.log("Comandos registrados com sucesso!");
+  } catch (error) {
+    console.error("Erro ao registrar comandos:", error);
+  }
+})();
+
+// Evento ready
+client.once("ready", () => {
+  console.log(`Bot online como ${client.user.tag}`);
 });
 
-const IDS = {
-  CHANNELS: { RANKING: "1473874178766671993", APOSTADO: "1473873854232264886", X1: "1473873994674606231", SIMU: "1465842384586670254" },
-  ROLES: { STAFF: "1452822476949029001", DONO: "1452822605773148312", ORGANIZADOR: "1453126709447754010" }
-};
-
-// Funções Auxiliares de Banco de Dados
-function loadData(file) { 
-  if (!fs.existsSync(`./${file}.json`)) fs.writeFileSync(`./${file}.json`, "{}");
-  try {
-    return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}");
-  } catch (e) { return {}; }
-}
-function saveData(file, data) { fs.writeFileSync(`./${file}.json`, JSON.stringify(data, null, 2)); }
-
-const commands = [
-  new SlashCommandBuilder().setName("ranking").setDescription("Ver o ranking de Simu"),
-  new SlashCommandBuilder()
-    .setName("simu")
-    .setDescription("Criar uma Simulação/Copa")
-    .addStringOption(opt => opt.setName("mapa").setDescription("Mapa da Simu").setRequired(true))
-    .addIntegerOption(opt => opt.setName("vagas").setDescription("Total de participantes").setRequired(true))
-    .addStringOption(opt => opt.setName("tipo").setDescription("Tipo").addChoices({name:'1v1',value:'1v1'},{name:'2v2',value:'2v2'}).setRequired(true))
-].map(cmd => cmd.toJSON());
-
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-(async () => { try { await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands }); } catch (e) { console.error(e); } })();
-
+// Evento de interação
 client.on("interactionCreate", async (interaction) => {
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === "ranking") {
-      const data = loadData("database");
-      const sorted = Object.entries(data).sort((a, b) => b.v - a.v).slice(0, 10);
-      let table = "POS  JOGADOR                     #1   #2\n------------------------------------------\n";
-      
-      sorted.forEach(([id, stats], i) => {
-        const user = client.users.cache.get(id);
-        const name = (user ? user.username : "Desconhecido").substring(0, 20);
-        table += `${(i+1).toString().padEnd(5)}${name.padEnd(25)}${(stats.v || 0).toString().padEnd(5)}${stats.d || 0}\n`;
-      });
 
-      const rankEmbed = new EmbedBuilder()
-        .setTitle("🏆 Ranking Simu")
-        .setColor(0x8B5CF6)
-        .setDescription(`\`\`\`\n${table}\n\`\`\``)
-        .setFooter({ text: "Atualizado após cada final de Simu" });
+  // =========================
+  // /parceria
+  // =========================
+  if (interaction.isChatInputCommand() && interaction.commandName === "parceria") {
+    const modal = new ModalBuilder()
+      .setCustomId("modal_parceria")
+      .setTitle("Nova Parceria");
 
-      return interaction.reply({ embeds: [rankEmbed] });
-    }
+    const nome = new TextInputBuilder()
+      .setCustomId("nome_cla")
+      .setLabel("Nome do clã")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-    if (interaction.commandName === "simu") {
-      if (!interaction.member.roles.cache.has(IDS.ROLES.ORGANIZADOR)) return interaction.reply({ content: "Sem permissão!", ephemeral: true });
-      const mapa = interaction.options.getString("mapa"), vagas = interaction.options.getInteger("vagas"), tipo = interaction.options.getString("tipo");
-      
-      const embed = new EmbedBuilder()
-        .setTitle(`🏆 NOVA SIMU ${tipo}`)
-        .setColor("Purple")
-        .addFields(
-            { name: "🗺️ Mapa", value: mapa, inline: true }, 
-            { name: "👥 Vagas", value: `0/${vagas}`, inline: true }, 
-            { name: "🎮 Tipo", value: tipo, inline: true }, 
-            { name: "📝 Participantes", value: "*Ninguém inscrito*" }
-        );
+    const fechou = new TextInputBuilder()
+      .setCustomId("quem_fechou")
+      .setLabel("Parceria fechada por")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-      const row1 = new ActionRowBuilder();
-      if (tipo === "1v1") {
-        row1.addComponents(new ButtonBuilder().setCustomId(`in_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary));
-      } else {
-        const numTeams = Math.min(5, Math.ceil(vagas / 2));
-        for (let i = 0; i < numTeams; i++) {
-          row1.addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
-        }
-      }
-      
-      const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_simu_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger));
+    const imagem = new TextInputBuilder()
+      .setCustomId("url_imagem")
+      .setLabel("URL da imagem")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-      await interaction.reply({ embeds: [embed], components: [row1, row2] });
-      const copas = loadData("copas");
-      copas[interaction.id] = { vagas, tipo, mapa, players: [], teams: {} };
-      saveData("copas", copas);
-    }
-  }
+    const link = new TextInputBuilder()
+      .setCustomId("link_servidor")
+      .setLabel("Link do servidor")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
 
-  if (interaction.isButton()) {
-    const [action, param, copaId] = interaction.customId.split("_");
-    const idReal = copaId || param;
-    const copas = loadData("copas");
-    const copa = copas[idReal];
-    if (!copa) return;
-
-    await interaction.deferUpdate();
-
-    if (action === "out") {
-      copa.players = (copa.players || []).filter(id => id !== interaction.user.id);
-      Object.keys(copa.teams || {}).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
-    } else if (action === "in") {
-      if (copa.players.length < copa.vagas && !copa.players.includes(interaction.user.id)) copa.players.push(interaction.user.id);
-    } else if (action === "tm") {
-      if (!copa.teams[param]) copa.teams[param] = [];
-      if (copa.teams[param].length < 2 && !copa.teams[param].includes(interaction.user.id)) {
-        Object.keys(copa.teams).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
-        copa.teams[param].push(interaction.user.id);
-      }
-    }
-
-    saveData("copas", copas);
-
-    let listaStr = copa.tipo === "1v1" 
-      ? copa.players.map((id, i) => `**${i+1}.** <@${id}>`).join("\n")
-      : Object.entries(copa.teams).map(([t, m]) => `**Time ${t}:** ${m.map(id => `<@${id}>`).join(", ") || "*Vazio*"}`).join("\n");
-
-    const total = copa.tipo === "1v1" ? copa.players.length : Object.values(copa.teams).flat().length;
-    const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setFields(
-      { name: "🗺️ Mapa", value: copa.mapa, inline: true },
-      { name: "👥 Vagas", value: `${total}/${copa.vagas}`, inline: true },
-      { name: "🎮 Tipo", value: copa.tipo, inline: true },
-      { name: "📝 Participantes", value: listaStr || "*Ninguém inscrito*" }
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(nome),
+      new ActionRowBuilder().addComponents(fechou),
+      new ActionRowBuilder().addComponents(imagem),
+      new ActionRowBuilder().addComponents(link)
     );
 
-    await interaction.message.edit({ embeds: [newEmbed] });
+    await interaction.showModal(modal);
   }
+
+  // =========================
+  // /xcla
+  // =========================
+  if (interaction.isChatInputCommand() && interaction.commandName === "xcla") {
+    const modal = new ModalBuilder()
+      .setCustomId("modal_xcla")
+      .setTitle("Registrar X-Clã");
+
+    const clafora = new TextInputBuilder()
+      .setCustomId("clafora")
+      .setLabel("Nome do clã FORA")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const resultado = new TextInputBuilder()
+      .setCustomId("resultado")
+      .setLabel("Resultado (CASA X FORA)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const mapa = new TextInputBuilder()
+      .setCustomId("mapa")
+      .setLabel("Mapa da partida")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const data = new TextInputBuilder()
+      .setCustomId("data")
+      .setLabel("Data da partida")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(clafora),
+      new ActionRowBuilder().addComponents(resultado),
+      new ActionRowBuilder().addComponents(mapa),
+      new ActionRowBuilder().addComponents(data)
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  // =========================
+  // Recebendo modal de /parceria
+  // =========================
+  if (interaction.isModalSubmit() && interaction.customId === "modal_parceria") {
+    const nome = interaction.fields.getTextInputValue("nome_cla");
+    const fechou = interaction.fields.getTextInputValue("quem_fechou");
+    const imagem = interaction.fields.getTextInputValue("url_imagem");
+    const link = interaction.fields.getTextInputValue("link_servidor");
+
+    await interaction.reply({
+      content: "",
+      embeds: [
+        {
+          title: "Parceria fechada",
+          color: 0xFF9900,
+          image: { url: imagem },
+          fields: [
+            { name: "Nome do clã:", value: nome, inline: true },
+            { name: "Parceria fechada por:", value: fechou, inline: true }
+          ]
+        }
+      ],
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              label: "Entre no server",
+              style: 5,
+              url: link
+            }
+          ]
+        }
+      ]
+    });
+  }
+
+  // =========================
+  // Recebendo modal de /xcla
+  // =========================
+  if (interaction.isModalSubmit() && interaction.customId === "modal_xcla") {
+    const clafora = interaction.fields.getTextInputValue("clafora");
+    const resultado = interaction.fields.getTextInputValue("resultado");
+    const mapa = interaction.fields.getTextInputValue("mapa");
+    const data = interaction.fields.getTextInputValue("data");
+
+    await interaction.reply({
+      embeds: [
+        {
+          title: "⚔️ Resultado de X-Clã",
+          color: 10181046,
+          footer: { text: "Registro oficial da partida" },
+          fields: [
+            { name: "🏴 Clã CASA", value: "SZ", inline: true },
+            { name: "🏳️ Clã FORA", value: clafora, inline: true },
+            { name: "📊 Resultado", value: `CASA ${resultado} FORA` },
+            { name: "🗺️ Mapa", value: mapa },
+            { name: "⏰ Data", value: data, inline: true }
+          ]
+        }
+      ]
+    });
+  }
+
 });
 
+// Login do bot
 client.login(process.env.TOKEN);
