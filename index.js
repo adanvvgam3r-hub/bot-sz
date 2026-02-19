@@ -12,19 +12,21 @@ const {
 } = require("discord.js");
 
 // Criando o client
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// Registro do comando /parceria
+// Comandos a registrar
 const commands = [
   new SlashCommandBuilder()
     .setName("parceria")
     .setDescription("Criar parceria com modal")
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("xcla")
+    .setDescription("Registrar resultado de X-Clã")
     .toJSON()
 ];
 
-// REST para registrar o comando na guild
+// REST para registrar comandos na guild
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
@@ -33,13 +35,13 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       { body: commands }
     );
-    console.log("Comando /parceria registrado com sucesso!");
+    console.log("Comandos registrados com sucesso!");
   } catch (error) {
-    console.error("Erro ao registrar comando:", error);
+    console.error("Erro ao registrar comandos:", error);
   }
 })();
 
-// Evento quando o bot está online
+// Evento ready
 client.once("ready", () => {
   console.log(`Bot online como ${client.user.tag}`);
 });
@@ -47,9 +49,10 @@ client.once("ready", () => {
 // Evento de interação
 client.on("interactionCreate", async (interaction) => {
 
-  // /parceria abre o modal
+  // =========================
+  // /parceria
+  // =========================
   if (interaction.isChatInputCommand() && interaction.commandName === "parceria") {
-
     const modal = new ModalBuilder()
       .setCustomId("modal_parceria")
       .setTitle("Nova Parceria");
@@ -88,9 +91,52 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.showModal(modal);
   }
 
-  // Recebendo dados do modal
-  if (interaction.isModalSubmit() && interaction.customId === "modal_parceria") {
+  // =========================
+  // /xcla
+  // =========================
+  if (interaction.isChatInputCommand() && interaction.commandName === "xcla") {
+    const modal = new ModalBuilder()
+      .setCustomId("modal_xcla")
+      .setTitle("Registrar X-Clã");
 
+    const clafora = new TextInputBuilder()
+      .setCustomId("clafora")
+      .setLabel("Nome do clã FORA")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const resultado = new TextInputBuilder()
+      .setCustomId("resultado")
+      .setLabel("Resultado (CASA X FORA)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const mapa = new TextInputBuilder()
+      .setCustomId("mapa")
+      .setLabel("Mapa da partida")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const data = new TextInputBuilder()
+      .setCustomId("data")
+      .setLabel("Data da partida")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(clafora),
+      new ActionRowBuilder().addComponents(resultado),
+      new ActionRowBuilder().addComponents(mapa),
+      new ActionRowBuilder().addComponents(data)
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  // =========================
+  // Recebendo modal de /parceria
+  // =========================
+  if (interaction.isModalSubmit() && interaction.customId === "modal_parceria") {
     const nome = interaction.fields.getTextInputValue("nome_cla");
     const fechou = interaction.fields.getTextInputValue("quem_fechou");
     const imagem = interaction.fields.getTextInputValue("url_imagem");
@@ -119,6 +165,33 @@ client.on("interactionCreate", async (interaction) => {
               style: 5,
               url: link
             }
+          ]
+        }
+      ]
+    });
+  }
+
+  // =========================
+  // Recebendo modal de /xcla
+  // =========================
+  if (interaction.isModalSubmit() && interaction.customId === "modal_xcla") {
+    const clafora = interaction.fields.getTextInputValue("clafora");
+    const resultado = interaction.fields.getTextInputValue("resultado");
+    const mapa = interaction.fields.getTextInputValue("mapa");
+    const data = interaction.fields.getTextInputValue("data");
+
+    await interaction.reply({
+      embeds: [
+        {
+          title: "⚔️ Resultado de X-Clã",
+          color: 10181046,
+          footer: { text: "Registro oficial da partida" },
+          fields: [
+            { name: "🏴 Clã CASA", value: "SZ", inline: true },
+            { name: "🏳️ Clã FORA", value: clafora, inline: true },
+            { name: "📊 Resultado", value: `CASA ${resultado} FORA` },
+            { name: "🗺️ Mapa", value: mapa },
+            { name: "⏰ Data", value: data, inline: true }
           ]
         }
       ]
