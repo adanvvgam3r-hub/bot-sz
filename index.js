@@ -14,7 +14,9 @@ const IDS = {
   ROLES: { STAFF: "1452822476949029001", DONO: "1452822605773148312", ORGANIZADOR: "1453126709447754010" }
 };
 
-const copasAtivas = new Map();
+// Funções de Banco de Dados Simples
+function loadData(file) { return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}"); }
+function saveData(file, data) { fs.writeFileSync(`./${file}.json`, JSON.stringify(data, null, 2)); }
 
 const commands = [
   new SlashCommandBuilder().setName("ranking").setDescription("Ver o ranking de Simu"),
@@ -22,32 +24,25 @@ const commands = [
     .setName("simu")
     .setDescription("Criar uma Simulação/Copa")
     .addStringOption(opt => opt.setName("mapa").setDescription("Mapa da Simu").setRequired(true))
-    .addIntegerOption(opt => opt.setName("vagas").setDescription("Total de participantes (ex: 4, 8)").setRequired(true))
-    .addStringOption(opt => opt.setName("tipo").setDescription("Tipo de jogo").addChoices({name:'1v1',value:'1v1'},{name:'2v2',value:'2v2'}).setRequired(true))
+    .addIntegerOption(opt => opt.setName("vagas").setDescription("Total de participantes").setRequired(true))
+    .addStringOption(opt => opt.setName("tipo").setDescription("Tipo").addChoices({name:'1v1',value:'1v1'},{name:'2v2',value:'2v2'}).setRequired(true))
 ].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 (async () => { try { await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands }); } catch (e) { console.error(e); } })();
 
-function updateRank(userId, win) {
-  let data = JSON.parse(fs.readFileSync("./database.json", "utf8") || "{}");
-  if (!data[userId]) data[userId] = { v: 0, d: 0 };
-  if (win) data[userId].v += 1; else data[userId].d += 1;
-  fs.writeFileSync("./database.json", JSON.stringify(data, null, 2));
-}
-
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === "ranking") {
-      let data = JSON.parse(fs.readFileSync("./database.json", "utf8") || "{}");
-      let sorted = Object.entries(data).sort((a, b) => b[1].v - a[1].v).slice(0, 10);
+      const data = loadData("database");
+      const sorted = Object.entries(data).sort((a, b) => b.v - a.v).slice(0, 10);
       let table = "POS  JOGADOR                     #1   #2\n------------------------------------------\n";
       sorted.forEach(([id, stats], i) => {
         const user = client.users.cache.get(id);
         const name = (user ? user.username : "Desconhecido").substring(0, 20);
         table += `${(i+1).toString().padEnd(5)}${name.padEnd(25)}${stats.v.toString().padEnd(5)}${stats.d}\n`;
       });
-      await interaction.reply({ embeds: });
+      return interaction.reply({ embeds: });
     }
 
     if (interaction.commandName === "simu") {
@@ -57,88 +52,68 @@ client.on("interactionCreate", async (interaction) => {
       const embed = new EmbedBuilder()
         .setTitle(`🏆 NOVA SIMU ${tipo}`)
         .setColor("Purple")
-        .addFields({ name: "🗺️ Mapa", value: mapa, inline: true }, { name: "👥 Vagas", value: `0/${vagas}`, inline: true }, { name: "📝 Participantes", value: "*Ninguém inscrito*" });
+        .addFields(
+            { name: "🗺️ Mapa", value: mapa, inline: true }, 
+            { name: "👥 Vagas", value: `0/${vagas}`, inline: true }, 
+            { name: "🎮 Tipo", value: tipo, inline: true }, 
+            { name: "📝 Participantes", value: "*Ninguém inscrito*" }
+        );
 
-      const rows = [];
+      const rows = [new ActionRowBuilder()];
       if (tipo === "1v1") {
-        rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`inscrever_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary)));
+        rows[0].addComponents(new ButtonBuilder().setCustomId(`in_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary));
       } else {
-        const row1 = new ActionRowBuilder();
-        for (let i = 0; i < Math.ceil(vagas/2); i++) {
-          row1.addComponents(new ButtonBuilder().setCustomId(`team_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
+        for (let i = 0; i < Math.min(5, Math.ceil(vagas/2)); i++) {
+          rows[0].addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
         }
-        rows.push(row1);
       }
-      rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`sair_simu_${interaction.id}`).setLabel("Sair da Simu").setStyle(ButtonStyle.Danger)));
+      rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger)));
 
-      const msg = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
-      copasAtivas.set(interaction.id, { vagas, tipo, mapa, players: {}, teams: {} });
+      await interaction.reply({ embeds: [embed], components: rows });
+      const copas = loadData("copas");
+      copas[interaction.id] = { vagas, tipo, mapa, players: [], teams: {} };
+      saveData("copas", copas);
     }
   }
 
   if (interaction.isButton()) {
-    const parts = interaction.customId.split("_");
-    const action = parts[0], param = parts[1], copaId = parts[2];
-    const copa = copasAtivas.get(copaId);
+    await interaction.deferUpdate(); // Resolve o erro de "Aplicativo não respondeu"
+    
+    const [action, param, copaId] = interaction.customId.split("_");
+    const idReal = copaId || param;
+    const copas = loadData("copas");
+    const copa = copas[idReal];
     if (!copa) return;
 
-    // SAIR
-    if (action === "sair") {
-      delete copa.players[interaction.user.id];
+    if (action === "out") {
+      copa.players = copa.players.filter(id => id !== interaction.user.id);
       Object.keys(copa.teams).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
-      await interaction.reply({ content: "Você saiu!", ephemeral: true });
-    }
-
-    // ENTRAR 1V1
-    if (action === "inscrever") {
-      if (Object.keys(copa.players).length >= copa.vagas) return interaction.reply({ content: "Lotado!", ephemeral: true });
-      copa.players[interaction.user.id] = true;
-      await interaction.reply({ content: "Inscrito!", ephemeral: true });
-    }
-
-    // ENTRAR TIME (2V2)
-    if (action === "team") {
+    } else if (action === "in") {
+      if (copa.players.length < copa.vagas && !copa.players.includes(interaction.user.id)) copa.players.push(interaction.user.id);
+    } else if (action === "tm") {
       if (!copa.teams[param]) copa.teams[param] = [];
-      if (copa.teams[param].length >= 2) return interaction.reply({ content: "Time cheio!", ephemeral: true });
-      
-      // Remove de outros times antes de entrar no novo
-      Object.keys(copa.teams).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
-      copa.teams[param].push(interaction.user.id);
-      await interaction.reply({ content: `Entrou no Time ${param}!`, ephemeral: true });
+      if (copa.teams[param].length < 2 && !copa.teams[param].includes(interaction.user.id)) {
+        Object.keys(copa.teams).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
+        copa.teams[param].push(interaction.user.id);
+      }
     }
 
-    // ATUALIZAR EMBED
-    let listaStr = "";
-    if (copa.tipo === "1v1") {
-      listaStr = Object.keys(copa.players).map((id, i) => `**${i+1}.** <@${id}>`).join("\n");
-    } else {
-      listaStr = Object.entries(copa.teams).map(([t, members]) => `**Time ${t}:** ${members.map(m => `<@${m}>`).join(", ") || "*Vazio*"}`).join("\n");
-    }
+    saveData("copas", copas);
 
-    const total = copa.tipo === "1v1" ? Object.keys(copa.players).length : Object.values(copa.teams).flat().length;
+    // Atualizar Embed
+    let listaStr = copa.tipo === "1v1" 
+      ? copa.players.map((id, i) => `**${i+1}.** <@${id}>`).join("\n")
+      : Object.entries(copa.teams).map(([t, m]) => `**Time ${t}:** ${m.map(id => `<@${id}>`).join(", ") || "*Vazio*"}`).join("\n");
+
+    const total = copa.tipo === "1v1" ? copa.players.length : Object.values(copa.teams).flat().length;
     const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setFields(
       { name: "🗺️ Mapa", value: copa.mapa, inline: true },
       { name: "👥 Vagas", value: `${total}/${copa.vagas}`, inline: true },
       { name: "🎮 Tipo", value: copa.tipo, inline: true },
       { name: "📝 Participantes", value: listaStr || "*Ninguém inscrito*" }
     );
+
     await interaction.message.edit({ embeds: [newEmbed] });
-
-    // START SE LOTAR
-    if (total >= copa.vagas) {
-        await interaction.channel.send("🚨 **Simu Lotada! Criando canais...**");
-        // Lógica de sorteio de canais aqui...
-        copasAtivas.delete(copaId);
-    }
-  }
-
-  // BOTÕES DE VENCEDOR (MANTIDOS DA VERSÃO ANTERIOR)
-  if (interaction.customId.startsWith("vencedor_")) {
-    if (!interaction.member.roles.cache.has(IDS.ROLES.STAFF)) return interaction.reply({ content: "Só Staff!", ephemeral: true });
-    const [_, winId, loseId] = interaction.customId.split("_");
-    updateRank(winId, true); updateRank(loseId, false);
-    await interaction.reply("Resultado salvo!");
-    setTimeout(() => interaction.channel.delete(), 3000);
   }
 });
 
