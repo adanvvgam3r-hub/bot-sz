@@ -20,7 +20,7 @@ const {
 
 // ═════════════════════════════════════════════════════════════════════
 // ========================= CONFIGURAÇÕES =========================
-// ═════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════��════
 
 const CHANNELS = {
   RANKING: "1473874178766671993",
@@ -56,6 +56,8 @@ const EMOTES = {
   INFO: "ℹ️",
   BRACKET: "🗂️",
   TEAM: "⚽",
+  WAIT: "⏳",
+  NEXT: "▶️",
 };
 
 const client = new Client({
@@ -125,7 +127,7 @@ function salvarTournaments(tournaments) {
   }
 }
 
-// ════════════════════════════════════════════════════════════��════════
+// ═════════════════════════════════════════════════════════════════════
 // ========================= UTILS - RANKING ==========================
 // ═════════════════════════════════════════════════════════════════════
 
@@ -586,9 +588,25 @@ async function processarSimuModal(interaction) {
     const tipoJogo = interaction.fields.getTextInputValue("tipo_jogo");
     const qtdParticipantes = parseInt(interaction.fields.getTextInputValue("qtd_participantes"));
 
+    // Validações
+    if (!organizador || !jogo || !versao || !mapa || !tipoJogo || !qtdParticipantes) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Todos os campos são obrigatórios.`,
+        ephemeral: true,
+      });
+    }
+
+    if (isNaN(qtdParticipantes) || qtdParticipantes < 2) {
+      return interaction.reply({
+        content: `${EMOTES.EXIT} Quantidade de participantes deve ser no mínimo 2.`,
+        ephemeral: true,
+      });
+    }
+
     const tournamentId = criarTournamentId();
     const tournaments = carregarTournaments();
 
+    // Salvar informações básicas PRIMEIRO
     tournaments[tournamentId] = {
       organizador,
       jogo,
@@ -607,626 +625,48 @@ async function processarSimuModal(interaction) {
 
     salvarTournaments(tournaments);
 
-    const qtdTimes = calcularQtdTimes(qtdParticipantes, tipoJogo);
-    const canais = [];
-
-    for (let i = 1; i <= qtdTimes; i++) {
-      const canal = await guild.channels.create({
-        name: `time-${i}-${tournamentId.substring(0, 5)}`,
-        type: ChannelType.GuildText,
-      });
-
-      const embed = new EmbedBuilder()
-        .setTitle(`${EMOTES.TEAM} Time ${i}`)
-        .setDescription(`${tournamentId}\n\n${EMOTES.ENTER} Clique em Entrar para se juntar ao time ${i}`)
-        .setColor(3066993);
-
-      const botoes = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`simu_entrar_${tournamentId}_${i}`)
-          .setLabel(`${EMOTES.ENTER} Entrar`)
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`simu_sair_${tournamentId}_${i}`)
-          .setLabel(`${EMOTES.EXIT} Sair`)
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId(`simu_trocar_${tournamentId}_${i}`)
-          .setLabel(`${EMOTES.VS} Trocar Time`)
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      await canal.send({ embeds: [embed], components: [botoes] });
-      canais.push(canal.id);
-
-      tournaments[tournamentId].times[i] = [];
-    }
-
-    tournaments[tournamentId].canais = canais;
-    salvarTournaments(tournaments);
-
+    // Mostrar resumo ANTES de criar canais
     const embed = new EmbedBuilder()
-      .setTitle(`${EMOTES.CHECK} Simu Criada`)
-      .setDescription(`Simu "${organizador}" criada com sucesso!`)
+      .setTitle(`${EMOTES.WAIT} Criando Simu...`)
+      .setDescription(`${EMOTES.INFO} Aguarde enquanto criamos os canais de inscrição`)
       .addFields(
         { name: `${EMOTES.PLAY} Jogo`, value: jogo },
         { name: `${EMOTES.INFO} Versão`, value: versao },
         { name: `${EMOTES.INFO} Mapa`, value: mapa },
         { name: `${EMOTES.VS} Tipo`, value: tipoJogo },
-        { name: `${EMOTES.BRACKET} Participantes`, value: `${0}/${qtdParticipantes}` },
-        { name: `${EMOTES.INFO} ID`, value: tournamentId, inline: false }
+        { name: `${EMOTES.BRACKET} Total Participantes`, value: `0/${qtdParticipantes}` },
+        { name: `${EMOTES.INFO} ID`, value: `\`${tournamentId}\`` }
       )
-      .setColor(5763719);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  } catch (error) {
-    console.error("Erro ao processar Simu modal:", error);
-    return interaction.reply({
-      content: `${EMOTES.EXIT} Erro ao criar Simu. Tente novamente.`,
-      ephemeral: true,
-    });
-  }
-}
-
-function calcularQtdTimes(qtdParticipantes, tipoJogo) {
-  const [playersPorTime] = tipoJogo.match(/\d/).map(Number);
-  return qtdParticipantes / playersPorTime;
-}
-
-function verificarSimuCompleta(tournament) {
-  const tamanhoTime = parseInt(tournament.tipoJogo[0]);
-  for (const [idx, players] of Object.entries(tournament.times)) {
-    if (!players || players.length < tamanhoTime) {
-      return false;
-    }
-  }
-  return true;
-}
-
-async function iniciarBracketAutomatico(guild, tournamentId) {
-  try {
-    const tournaments = carregarTournaments();
-    const tournament = tournaments[tournamentId];
-
-    if (!tournament) {
-      return;
-    }
-
-    const bracket = gerarBracketAutomatico(tournament.times, tournament.tipoJogo);
-    tournament.bracket = bracket;
-    tournament.status = "bracket";
-    tournament.faseAtual = "oitavas";
-    salvarTournaments(tournaments);
-
-    for (const match of bracket) {
-      await criarCanalPartida(guild, match.matchId, match.time1, match.time2, tournament, match.fase);
-    }
-
-    const simuChannel = await guild.channels.fetch(CHANNELS.SIMU);
-    if (simuChannel) {
-      const embedBracket = new EmbedBuilder()
-        .setTitle(`${EMOTES.BRACKET} Bracket Gerado - ${tournament.organizador}`)
-        .setDescription(`Total de ${bracket.length} partidas na fase de oitavas\n\n${EMOTES.VS} **PARTIDAS:**`)
-        .setColor(10181046);
-
-      bracket.forEach((match, idx) => {
-        const time1 = match.time1.players.map((id) => `<@${id}>`).join(", ");
-        const time2 = match.time2.players.map((id) => `<@${id}>`).join(", ");
-        embedBracket.addFields({
-          name: `Partida ${idx + 1}`,
-          value: `${time1} ${EMOTES.VS} ${time2}`,
-          inline: false,
-        });
-      });
-
-      await simuChannel.send({ embeds: [embedBracket] });
-    }
-  } catch (error) {
-    console.error("Erro ao iniciar bracket:", error);
-  }
-}
-
-async function criarCanalPartida(guild, matchId, time1, time2, tournament, fase = "oitavas") {
-  try {
-    const permissoes = [
-      ...time1.players.map((id) => ({
-        id,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-      })),
-      ...time2.players.map((id) => ({
-        id,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-      })),
-      {
-        id: STAFF.OWNER,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-      },
-      {
-        id: STAFF.STAFF,
-        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageMessages],
-      },
-      {
-        id: guild.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      },
-    ];
-
-    const canal = await guild.channels.create({
-      name: `${fase}-${matchId.substring(0, 8)}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: permissoes,
-    });
-
-    const time1Str = time1.players.map((id) => `<@${id}>`).join(", ");
-    const time2Str = time2.players.map((id) => `<@${id}>`).join(", ");
-
-    const embed = new EmbedBuilder()
-      .setTitle(`${EMOTES.PLAY} ${fase.toUpperCase()} - Partida`)
-      .addFields(
-        { name: `${EMOTES.TEAM} Time 1`, value: time1Str || "Vazio" },
-        { name: `${EMOTES.TEAM} Time 2`, value: time2Str || "Vazio" },
-        { name: `${EMOTES.INFO} Mapa`, value: tournament.mapa }
-      )
-      .setColor(3066993);
-
-    const botoes = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`simu_vencedor_1_${matchId}`)
-        .setLabel(`${EMOTES.WIN} Time 1 Venceu`)
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`simu_vencedor_2_${matchId}`)
-        .setLabel(`${EMOTES.WIN} Time 2 Venceu`)
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    await canal.send({ embeds: [embed], components: [botoes] });
-
-    const matches = carregarMatches();
-    matches[matchId] = {
-      tipo: "simu",
-      tournamentId: tournamentId,
-      time1: time1.players,
-      time2: time2.players,
-      status: "pendente",
-      canalPartida: canal.id,
-      fase: fase,
-      criadoEm: new Date().toISOString(),
-    };
-    salvarMatches(matches);
-
-    return canal;
-  } catch (error) {
-    console.error("Erro ao criar canal partida:", error);
-  }
-}
-
-async function finalizarPartidaSimu(interaction, matchId, timeVencedor) {
-  try {
-    const matches = carregarMatches();
-    const tournaments = carregarTournaments();
-
-    if (!matches[matchId]) {
-      return interaction.reply({ content: `${EMOTES.EXIT} Match não encontrado.`, ephemeral: true });
-    }
-
-    if (!STAFF.IDS.includes(interaction.user.id)) {
-      return interaction.reply({
-        content: `${EMOTES.EXIT} Apenas Staff/Dono pode declarar vencedor.`,
-        ephemeral: true,
-      });
-    }
-
-    const match = matches[matchId];
-
-    let tournament = null;
-    let tournamentId = null;
-    for (const [tId, t] of Object.entries(tournaments)) {
-      if (t.bracket.some((b) => b.matchId === matchId)) {
-        tournament = t;
-        tournamentId = tId;
-        break;
-      }
-    }
-
-    if (!tournament) {
-      return interaction.reply({ content: `${EMOTES.EXIT} Torneio não encontrado.`, ephemeral: true });
-    }
-
-    let bracketMatch = tournament.bracket.find((m) => m.matchId === matchId);
-
-    if (!bracketMatch) {
-      return interaction.reply({ content: `${EMOTES.EXIT} Partida não encontrada no bracket.`, ephemeral: true });
-    }
-
-    bracketMatch.vencedor = timeVencedor === 1 ? bracketMatch.time1 : bracketMatch.time2;
-    bracketMatch.status = "finalizada";
-
-    const vencedorIds = bracketMatch.vencedor.players;
-    const timePerded = timeVencedor === 1 ? bracketMatch.time2 : bracketMatch.time1;
-    const viceIds = timePerded.players;
-
-    atualizarRanking(vencedorIds, viceIds);
-
-    const partidasNaFase = tournament.bracket.filter((m) => m.fase === tournament.faseAtual);
-    const partidasFinalizadas = partidasNaFase.filter((m) => m.status === "finalizada");
-
-    let mensagemResultado = `${EMOTES.WIN} Time ${timeVencedor} venceu!\n\n`;
-    mensagemResultado += `**Vencedores:** ${vencedorIds.map((id) => `<@${id}>`).join(", ")}\n`;
-    mensagemResultado += `**Vice:** ${viceIds.map((id) => `<@${id}>`).join(", ")}`;
-
-    if (partidasFinalizadas.length === partidasNaFase.length) {
-      mensagemResultado += `\n\n${EMOTES.CHECK} Fase de ${tournament.faseAtual} concluída!`;
-
-      if (partidasNaFase.length === 1 && tournament.faseAtual === "final") {
-        mensagemResultado += `\n🎉 **${tournament.organizador}** finalizado!`;
-        tournament.status = "finalizado";
-
-        const embedFinal = new EmbedBuilder()
-          .setTitle(`${EMOTES.WIN} Campeões - ${tournament.organizador}`)
-          .setDescription(`**Vencedores:**\n${vencedorIds.map((id) => `<@${id}>`).join("\n")}`)
-          .addFields({
-            name: "Vice-Campeões",
-            value: viceIds.map((id) => `<@${id}>`).join("\n"),
-          })
-          .setColor(10181046);
-
-        const simuChannel = await interaction.guild.channels.fetch(CHANNELS.SIMU);
-        if (simuChannel) {
-          await simuChannel.send({ embeds: [embedFinal] });
-        }
-      } else if (partidasFinalizadas.length === partidasNaFase.length) {
-        const proximaFase = obterProximaFase(tournament.faseAtual);
-        const vencedoresOrdenados = partidasNaFase.filter((m) => m.vencedor).map((m) => m.vencedor);
-
-        const novoBracket = gerarProximaFase(vencedoresOrdenados);
-
-        tournament.faseAtual = proximaFase;
-        novoBracket.forEach((match) => {
-          match.fase = proximaFase;
-          match.status = "pendente";
-          tournament.bracket.push(match);
-        });
-
-        mensagemResultado += `\n\n➡️ Próxima fase: **${proximaFase}**\nPartidas: ${novoBracket.length}`;
-
-        for (const match of novoBracket) {
-          await criarCanalPartida(
-            interaction.guild,
-            match.matchId,
-            match.time1,
-            match.time2,
-            tournament,
-            proximaFase
-          );
-        }
-      }
-    }
-
-    salvarTournaments(tournaments);
-
-    try {
-      const canal = await interaction.guild.channels.fetch(interaction.channelId);
-      if (canal) {
-        await canal.delete();
-      }
-    } catch (error) {
-      console.error("Erro ao deletar canal:", error);
-    }
-
-    return interaction.reply({
-      content: mensagemResultado,
-      ephemeral: true,
-    });
-  } catch (error) {
-    console.error("Erro ao finalizar partida:", error);
-    return interaction.reply({
-      content: `${EMOTES.EXIT} Erro ao finalizar. Tente novamente.`,
-      ephemeral: true,
-    });
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// ========================= SLASH COMMANDS ===========================
-// ═════════════════════════════════════════════════════════════════════
-
-const commands = [
-  new SlashCommandBuilder().setName("parceria").setDescription("Criar parceria com modal").toJSON(),
-  new SlashCommandBuilder().setName("ranking").setDescription("Exibe o ranking atualizado").toJSON(),
-  new SlashCommandBuilder().setName("simu").setDescription("Criar um Simu/Copa").toJSON(),
-  new SlashCommandBuilder().setName("x1").setDescription("Criar X1").toJSON(),
-  new SlashCommandBuilder().setName("apostado").setDescription("Criar X1 Apostado").toJSON(),
-];
-
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-
-(async () => {
-  try {
-    await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), {
-      body: commands,
-    });
-    console.log("✅ Comandos registrados!");
-  } catch (error) {
-    console.error("❌ Erro ao registrar comandos:", error);
-  }
-})();
-
-// ═════════════════════════════════════════════════════════════════════
-// ========================= READY ====================================
-// ═════════════════════════════════════════════════════════════════════
-
-client.once("ready", () => {
-  console.log(`✅ Bot online como ${client.user.tag}`);
-});
-
-// ═════════════════════════════════════════════════════════════════════
-// ========================= INTERACTION HANDLER ========================
-// ═════════════════════════════════════════════════════════════════════
-
-client.on("interactionCreate", async (interaction) => {
-  if (interaction.isChatInputCommand()) {
-    const { commandName } = interaction;
-
-    if (commandName === "parceria") {
-      const modal = new ModalBuilder().setCustomId("modal_parceria").setTitle("Nova Parceria");
-
-      const nome = new TextInputBuilder()
-        .setCustomId("nome_cla")
-        .setLabel("Nome do clã")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const fechou = new TextInputBuilder()
-        .setCustomId("quem_fechou")
-        .setLabel("Parceria fechada por")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const imagem = new TextInputBuilder()
-        .setCustomId("url_imagem")
-        .setLabel("URL da imagem")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const link = new TextInputBuilder()
-        .setCustomId("link_servidor")
-        .setLabel("Link do servidor")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(nome),
-        new ActionRowBuilder().addComponents(fechou),
-        new ActionRowBuilder().addComponents(imagem),
-        new ActionRowBuilder().addComponents(link)
-      );
-
-      return interaction.showModal(modal);
-    }
-
-    if (commandName === "ranking") {
-      if (interaction.channelId !== CHANNELS.RANKING) {
-        return interaction.reply({
-          content: `Este comando só pode ser usado em <#${CHANNELS.RANKING}>.`,
-          ephemeral: true,
-        });
-      }
-      return interaction.reply({ embeds: [criarEmbedRanking()] });
-    }
-
-    if (commandName === "x1") {
-      return criarX1(interaction, false);
-    }
-
-    if (commandName === "apostado") {
-      return criarX1(interaction, true);
-    }
-
-    if (commandName === "simu") {
-      return criarSimu(interaction);
-    }
-  }
-
-  if (interaction.isModalSubmit()) {
-    if (interaction.customId === "modal_parceria") {
-      const nome = interaction.fields.getTextInputValue("nome_cla");
-      const fechou = interaction.fields.getTextInputValue("quem_fechou");
-      const imagem = interaction.fields.getTextInputValue("url_imagem");
-      const link = interaction.fields.getTextInputValue("link_servidor");
-
-      const embed = new EmbedBuilder()
-        .setTitle("Parceria fechada")
-        .setColor(16753920)
-        .setImage(imagem)
-        .addFields(
-          { name: "Nome do clã:", value: nome, inline: true },
-          { name: "Parceria fechada por:", value: fechou, inline: true }
-        );
-
-      const botao = new ButtonBuilder().setLabel("Entre no server").setStyle(ButtonStyle.Link).setURL(link);
-
-      return interaction.reply({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(botao)],
-      });
-    }
-
-    if (interaction.customId.startsWith("modal_x1_") || interaction.customId.startsWith("modal_apostado_")) {
-      const isApostado = interaction.customId.startsWith("modal_apostado_");
-      return processarX1Modal(interaction, isApostado);
-    }
-
-    if (interaction.customId.startsWith("modal_simu_")) {
-      return processarSimuModal(interaction);
-    }
-  }
-
-  if (interaction.isButton()) {
-    const { customId, user, guild } = interaction;
-
-    if (customId.startsWith("x1_entrar_")) {
-      const matchId = customId.replace("x1_entrar_", "");
-      return handleX1Entrar(interaction, matchId);
-    }
-
-    if (customId.startsWith("x1_vencedor_")) {
-      const parts = customId.split("_");
-      const vencedorAd = parts[2] === "ad1" ? 1 : 2;
-      const matchId = parts.slice(3).join("_");
-      return finalizarX1(interaction, matchId, vencedorAd);
-    }
-
-    if (customId.startsWith("simu_entrar_")) {
-      const [, , tournamentId, timeIndex] = customId.split("_");
-      const tournaments = carregarTournaments();
-      const tournament = tournaments[tournamentId];
-
-      if (!tournament) {
-        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
-      }
-
-      if (!tournament.times[timeIndex]) {
-        tournament.times[timeIndex] = [];
-      }
-
-      const tamanhoTime = parseInt(tournament.tipoJogo[0]);
-      if (tournament.times[timeIndex].length >= tamanhoTime) {
-        return interaction.reply({
-          content: `${EMOTES.EXIT} Este time está cheio. Escolha outro time.`,
-          ephemeral: true,
-        });
-      }
-
-      if (tournament.times[timeIndex].includes(user.id)) {
-        return interaction.reply({
-          content: `${EMOTES.EXIT} Você já está neste time.`,
-          ephemeral: true,
-        });
-      }
-
-      tournament.times[timeIndex].push(user.id);
-
-      if (verificarSimuCompleta(tournament)) {
-        await iniciarBracketAutomatico(guild, tournamentId);
-      }
-
-      salvarTournaments(tournaments);
-
-      return interaction.reply({
-        content: `${EMOTES.CHECK} <@${user.id}> entrou no Time ${timeIndex}!`,
-        ephemeral: true,
-      });
-    }
-
-    if (customId.startsWith("simu_sair_")) {
-      const [, , tournamentId, timeIndex] = customId.split("_");
-      const tournaments = carregarTournaments();
-      const tournament = tournaments[tournamentId];
-
-      if (!tournament) {
-        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
-      }
-
-      if (tournament.times[timeIndex]) {
-        const idx = tournament.times[timeIndex].indexOf(user.id);
-        if (idx > -1) {
-          tournament.times[timeIndex].splice(idx, 1);
-          salvarTournaments(tournaments);
-          return interaction.reply({
-            content: `${EMOTES.CHECK} <@${user.id}> saiu do Time ${timeIndex}!`,
-            ephemeral: true,
-          });
-        }
-      }
-
-      return interaction.reply({
-        content: `${EMOTES.EXIT} Você não está neste time.`,
-        ephemeral: true,
-      });
-    }
-
-    if (customId.startsWith("simu_trocar_")) {
-      const [, , tournamentId] = customId.split("_");
-      const tournaments = carregarTournaments();
-      const tournament = tournaments[tournamentId];
-
-      if (!tournament) {
-        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
-      }
-
-      for (let i = 1; i <= Object.keys(tournament.times).length; i++) {
-        if (tournament.times[i] && tournament.times[i].includes(user.id)) {
-          tournament.times[i] = tournament.times[i].filter((id) => id !== user.id);
-          break;
-        }
-      }
-
-      const options = [];
-      for (let i = 1; i <= Object.keys(tournament.times).length; i++) {
-        const tamanhoTime = parseInt(tournament.tipoJogo[0]);
-        const jogosNoTime = tournament.times[i] ? tournament.times[i].length : 0;
-        const disponivel = jogosNoTime < tamanhoTime;
-
-        options.push({
-          label: `Time ${i} (${jogosNoTime}/${tamanhoTime})`,
-          value: `simu_escolher_time_${tournamentId}_${i}`,
-          default: false,
-          disabled: !disponivel,
-        });
-      }
-
-      const select = new StringSelectMenuBuilder()
-        .setCustomId(`simu_select_time_${tournamentId}`)
-        .setPlaceholder("Escolha um time")
-        .addOptions(options);
-
-      return interaction.reply({
-        components: [new ActionRowBuilder().addComponents(select)],
-        ephemeral: true,
-      });
-    }
-
-    if (customId.startsWith("simu_vencedor_")) {
-      const parts = customId.split("_");
-      const timeVencedor = parts[2];
-      const matchId = parts.slice(3).join("_");
-
-      return finalizarPartidaSimu(interaction, matchId, parseInt(timeVencedor));
-    }
-  }
-
-  if (interaction.isStringSelectMenu()) {
-    if (interaction.customId.startsWith("simu_select_time_")) {
-      const tournamentId = interaction.customId.replace("simu_select_time_", "");
-      const selectedValue = interaction.values[0];
-      const [, , , novoTimeIndex] = selectedValue.split("_");
-
-      const tournaments = carregarTournaments();
-      const tournament = tournaments[tournamentId];
-
-      if (!tournament) {
-        return interaction.reply({ content: `${EMOTES.EXIT} Simu não encontrada.`, ephemeral: true });
-      }
-
-      if (!tournament.times[novoTimeIndex]) {
-        tournament.times[novoTimeIndex] = [];
-      }
-
-      tournament.times[novoTimeIndex].push(interaction.user.id);
-
-      if (verificarSimuCompleta(tournament)) {
-        await iniciarBracketAutomatico(interaction.guild, tournamentId);
-      }
-
-      salvarTournaments(tournaments);
-
-      return interaction.reply({
-        content: `${EMOTES.CHECK} Você se mudou para o Time ${novoTimeIndex}!`,
-        ephemeral: true,
-      });
-    }
-  }
-});
-
-client.login(process.env.TOKEN);
+      .setColor(16776960);
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+
+    // Agora SIM criar os canais com delay
+    setTimeout(async () => {
+      try {
+        const qtdTimes = calcularQtdTimes(qtdParticipantes, tipoJogo);
+        const canais = [];
+
+        for (let i = 1; i <= qtdTimes; i++) {
+          try {
+            const canal = await guild.channels.create({
+              name: `time-${i}-${tournamentId.substring(0, 5)}`,
+              type: ChannelType.GuildText,
+            });
+
+            const embedTime = new EmbedBuilder()
+              .setTitle(`${EMOTES.TEAM} Time ${i}`)
+              .setDescription(
+                `${EMOTES.INFO} Tournament ID: \`${tournamentId}\`\n\n${EMOTES.ENTER} Clique em Entrar para se juntar`
+              )
+              .setColor(3066993);
+
+            const botoes = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`simu_entrar_${tournamentId}_${i}`)
+                .setLabel(`${EMOTES.ENTER} Entrar`)
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId(`simu_sair_${tournamentId}_${i}`)
+                .setLabel(`${EMOTES.EXIT} Sair`)
+                .se
