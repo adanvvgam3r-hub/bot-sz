@@ -14,8 +14,11 @@ const IDS = {
   ROLES: { STAFF: "1452822476949029001", DONO: "1452822605773148312", ORGANIZADOR: "1453126709447754010" }
 };
 
-// Funções de Banco de Dados Simples
-function loadData(file) { return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}"); }
+// Funções Auxiliares de Banco de Dados
+function loadData(file) { 
+  if (!fs.existsSync(`./${file}.json`)) fs.writeFileSync(`./${file}.json`, "{}");
+  return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}"); 
+}
 function saveData(file, data) { fs.writeFileSync(`./${file}.json`, JSON.stringify(data, null, 2)); }
 
 const commands = [
@@ -59,17 +62,18 @@ client.on("interactionCreate", async (interaction) => {
             { name: "📝 Participantes", value: "*Ninguém inscrito*" }
         );
 
-      const rows = [new ActionRowBuilder()];
+      const row1 = new ActionRowBuilder();
       if (tipo === "1v1") {
-        rows[0].addComponents(new ButtonBuilder().setCustomId(`in_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary));
+        row1.addComponents(new ButtonBuilder().setCustomId(`in_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary));
       } else {
-        for (let i = 0; i < Math.min(5, Math.ceil(vagas/2)); i++) {
-          rows[0].addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
+        for (let i = 0; i < Math.min(4, Math.ceil(vagas/2)); i++) {
+          row1.addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
         }
       }
-      rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger)));
+      
+      const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_simu_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger));
 
-      await interaction.reply({ embeds: [embed], components: rows });
+      await interaction.reply({ embeds: [embed], components: [row1, row2] });
       const copas = loadData("copas");
       copas[interaction.id] = { vagas, tipo, mapa, players: [], teams: {} };
       saveData("copas", copas);
@@ -77,13 +81,13 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.isButton()) {
-    await interaction.deferUpdate(); // Resolve o erro de "Aplicativo não respondeu"
-    
     const [action, param, copaId] = interaction.customId.split("_");
     const idReal = copaId || param;
     const copas = loadData("copas");
     const copa = copas[idReal];
     if (!copa) return;
+
+    await interaction.deferUpdate();
 
     if (action === "out") {
       copa.players = copa.players.filter(id => id !== interaction.user.id);
@@ -100,7 +104,6 @@ client.on("interactionCreate", async (interaction) => {
 
     saveData("copas", copas);
 
-    // Atualizar Embed
     let listaStr = copa.tipo === "1v1" 
       ? copa.players.map((id, i) => `**${i+1}.** <@${id}>`).join("\n")
       : Object.entries(copa.teams).map(([t, m]) => `**Time ${t}:** ${m.map(id => `<@${id}>`).join(", ") || "*Vazio*"}`).join("\n");
