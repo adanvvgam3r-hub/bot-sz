@@ -14,10 +14,12 @@ const IDS = {
   ROLES: { STAFF: "1452822476949029001", DONO: "1452822605773148312", ORGANIZADOR: "1453126709447754010" }
 };
 
-// Funções de Banco de Dados
+// Funções Auxiliares de Banco de Dados
 function loadData(file) { 
   if (!fs.existsSync(`./${file}.json`)) fs.writeFileSync(`./${file}.json`, "{}");
-  return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}"); 
+  try {
+    return JSON.parse(fs.readFileSync(`./${file}.json`, "utf8") || "{}");
+  } catch (e) { return {}; }
 }
 function saveData(file, data) { fs.writeFileSync(`./${file}.json`, JSON.stringify(data, null, 2)); }
 
@@ -40,12 +42,20 @@ client.on("interactionCreate", async (interaction) => {
       const data = loadData("database");
       const sorted = Object.entries(data).sort((a, b) => b.v - a.v).slice(0, 10);
       let table = "POS  JOGADOR                     #1   #2\n------------------------------------------\n";
+      
       sorted.forEach(([id, stats], i) => {
         const user = client.users.cache.get(id);
         const name = (user ? user.username : "Desconhecido").substring(0, 20);
-        table += `${(i+1).toString().padEnd(5)}${name.padEnd(25)}${stats.v.toString().padEnd(5)}${stats.d}\n`;
+        table += `${(i+1).toString().padEnd(5)}${name.padEnd(25)}${(stats.v || 0).toString().padEnd(5)}${stats.d || 0}\n`;
       });
-      return interaction.reply({ embeds: });
+
+      const rankEmbed = new EmbedBuilder()
+        .setTitle("🏆 Ranking Simu")
+        .setColor(0x8B5CF6)
+        .setDescription(`\`\`\`\n${table}\n\`\`\``)
+        .setFooter({ text: "Atualizado após cada final de Simu" });
+
+      return interaction.reply({ embeds: [rankEmbed] });
     }
 
     if (interaction.commandName === "simu") {
@@ -66,10 +76,12 @@ client.on("interactionCreate", async (interaction) => {
       if (tipo === "1v1") {
         row1.addComponents(new ButtonBuilder().setCustomId(`in_1v1_${interaction.id}`).setLabel("Inscrever-se").setStyle(ButtonStyle.Primary));
       } else {
-        for (let i = 0; i < Math.min(4, Math.ceil(vagas/2)); i++) {
+        const numTeams = Math.min(5, Math.ceil(vagas / 2));
+        for (let i = 0; i < numTeams; i++) {
           row1.addComponents(new ButtonBuilder().setCustomId(`tm_${String.fromCharCode(65+i)}_${interaction.id}`).setLabel(`Time ${String.fromCharCode(65+i)}`).setStyle(ButtonStyle.Secondary));
         }
       }
+      
       const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`out_simu_${interaction.id}`).setLabel("Sair").setStyle(ButtonStyle.Danger));
 
       await interaction.reply({ embeds: [embed], components: [row1, row2] });
@@ -89,8 +101,8 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.deferUpdate();
 
     if (action === "out") {
-      copa.players = copa.players.filter(id => id !== interaction.user.id);
-      Object.keys(copa.teams).forEach(t => copa.teams[t] = (copa.teams[t] || []).filter(id => id !== interaction.user.id));
+      copa.players = (copa.players || []).filter(id => id !== interaction.user.id);
+      Object.keys(copa.teams || {}).forEach(t => copa.teams[t] = copa.teams[t].filter(id => id !== interaction.user.id));
     } else if (action === "in") {
       if (copa.players.length < copa.vagas && !copa.players.includes(interaction.user.id)) copa.players.push(interaction.user.id);
     } else if (action === "tm") {
@@ -108,7 +120,7 @@ client.on("interactionCreate", async (interaction) => {
       : Object.entries(copa.teams).map(([t, m]) => `**Time ${t}:** ${m.map(id => `<@${id}>`).join(", ") || "*Vazio*"}`).join("\n");
 
     const total = copa.tipo === "1v1" ? copa.players.length : Object.values(copa.teams).flat().length;
-    const newEmbed = EmbedBuilder.from(interaction.message.embeds).setFields(
+    const newEmbed = EmbedBuilder.from(interaction.message.embeds[0]).setFields(
       { name: "🗺️ Mapa", value: copa.mapa, inline: true },
       { name: "👥 Vagas", value: `${total}/${copa.vagas}`, inline: true },
       { name: "🎮 Tipo", value: copa.tipo, inline: true },
