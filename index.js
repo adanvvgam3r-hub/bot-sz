@@ -7,7 +7,11 @@ const {
 } = require("discord.js");
 
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent
+    ] 
 });
 
 const CONFIG = {
@@ -51,9 +55,10 @@ async function atualizarRankingGlobal() {
             .slice(0, 10);
 
         const embed = new EmbedBuilder()
-            .setTitle("🏆 TOP 10 RANKING GERAL")
+            .setTitle("🏆 TOP 10 RANKING GERAL (X1 & AP)")
             .setColor("#FFD700")
             .setTimestamp()
+            .setFooter({ text: "Atualiza automaticamente a cada 2 min" })
             .setDescription(sorted.map((u, i) => `**${i+1}º** <@${u.id}> — Vitórias: \`${u.x1_v + u.ap_v}\` | Derrotas: \`${u.x1_d + u.ap_d}\``).join("\n") || "Nenhum dado registrado.");
 
         const messages = await channel.messages.fetch({ limit: 10 });
@@ -145,23 +150,43 @@ client.on("interactionCreate", async (interaction) => {
 
         if (customId === "modal_parceria") {
             return interaction.reply({
-                embeds:}],
-                components: [{ type: 1, components: [{ type: 2, label: "Entre no server", style: 5, url: fields.getTextInputValue("link_servidor") }]}]
+                embeds:
+                }],
+                components: [{
+                    type: 1,
+                    components: [{ type: 2, label: "Entre no server", style: 5, url: fields.getTextInputValue("link_servidor") }]
+                }]
             });
         }
 
         if (customId === "modal_xcla") {
-            return interaction.reply({ embeds: [{ title: "⚔️ Resultado de X-Clã", color: 10181046, fields: [
-                { name: "🏴 Clã CASA", value: "SZ", inline: true }, { name: "🏳️ Clã FORA", value: fields.getTextInputValue("clafora"), inline: true },
-                { name: "📊 Resultado", value: `CASA ${fields.getTextInputValue("resultado")} FORA` },
-                { name: "🗺️ Mapa", value: fields.getTextInputValue("mapa") }, { name: "⏰ Data", value: fields.getTextInputValue("data"), inline: true }
-            ]}]});
+            return interaction.reply({
+                embeds: [{
+                    title: "⚔️ Resultado de X-Clã",
+                    color: 10181046,
+                    fields: [
+                        { name: "🏴 Clã CASA", value: "SZ", inline: true },
+                        { name: "🏳️ Clã FORA", value: fields.getTextInputValue("clafora"), inline: true },
+                        { name: "📊 Resultado", value: `CASA ${fields.getTextInputValue("resultado")} FORA` },
+                        { name: "🗺️ Mapa", value: fields.getTextInputValue("mapa") },
+                        { name: "⏰ Data", value: fields.getTextInputValue("data"), inline: true }
+                    ]
+                }]
+            });
         }
 
         if (customId.startsWith("modal_x1") || customId.startsWith("modal_apostado")) {
             const type = customId.replace("modal_", "");
-            const embed = new EmbedBuilder().setTitle(`⚔️ DESAFIO ${type.toUpperCase()}`).setDescription(`**Mapa:** ${fields.getTextInputValue("mapa")}\n**Desafiante:** ${interaction.user}`).setColor("Blue");
-            const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`aceitar_${type}_${interaction.user.id}_${fields.getTextInputValue("oponente") || "any"}`).setLabel("ENTRAR").setStyle(ButtonStyle.Primary));
+            const embed = new EmbedBuilder()
+                .setTitle(`⚔️ DESAFIO ${type.toUpperCase()}`)
+                .setDescription(`**Mapa:** ${fields.getTextInputValue("mapa")}\n**Desafiante:** ${interaction.user}`)
+                .setColor("Blue");
+            const btn = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`aceitar_${type}_${interaction.user.id}_${fields.getTextInputValue("oponente") || "any"}`)
+                    .setLabel("ENTRAR")
+                    .setStyle(ButtonStyle.Primary)
+            );
             return interaction.reply({ embeds: [embed], components: [btn] });
         }
     }
@@ -191,7 +216,7 @@ client.on("interactionCreate", async (interaction) => {
                 new ButtonBuilder().setCustomId(`win_ad2_${criadorId}_${interaction.user.id}_${type}`).setLabel("Vencedor AD2").setStyle(ButtonStyle.Success)
             );
             await canal.send({ content: `<@&${CONFIG.ROLES.STAFF}>, declare o vencedor:`, components: [btns] });
-            return interaction.update({ content: `✅ Desafio aceito! Canal: ${canal}`, embeds: [], components: [] });
+            return interaction.update({ content: `✅ Desafio aceito! Canal criado: ${canal}`, embeds: [], components: [] });
         }
 
         if (action === "win") {
@@ -202,7 +227,7 @@ client.on("interactionCreate", async (interaction) => {
             updateStats(winnerKey === "ad1" ? p1 : p2, type, 'v');
             updateStats(winnerKey === "ad1" ? p2 : p1, type, 'd');
             await atualizarRankingGlobal();
-            await interaction.reply("🏆 Resultado salvo! Canal sendo deletado...");
+            await interaction.reply("🏆 Resultado salvo! O canal será deletado em breve.");
             setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
         }
     }
