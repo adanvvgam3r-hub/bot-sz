@@ -143,7 +143,24 @@ client.on("interactionCreate", async (interaction) => {
 
         if (customId === "modal_parceria") {
             return interaction.reply({
-                embeds:],
+                embeds:
+        }
+      ], // <--- Linha 146 aproximadamente: Fim do array de embeds
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              label: "Entre no server",
+              style: 5,
+              url: link
+            }
+          ]
+        }
+      ]
+    }); // <--- Fim do interaction.reply
+  } // <--- Fim do if (interaction.isModalSubmit())
                 components: [{ type: 1, components: [{ type: 2, label: "Entre no server", style: 5, url: fields.getTextInputValue("link_servidor") }]}]
             });
         }
