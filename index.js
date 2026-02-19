@@ -23,7 +23,7 @@ const CONFIG = {
     }
 };
 
-// --- DATABASE HELPERS ---
+// --- DATABASE ---
 function getData() {
     try {
         if (!fs.existsSync('./database.json')) fs.writeFileSync('./database.json', '{}');
@@ -38,7 +38,7 @@ function updateStats(userId, type, result) {
     fs.writeFileSync('./database.json', JSON.stringify(db, null, 2));
 }
 
-// --- RANKING AUTO-UPDATE (2 MIN) ---
+// --- RANKING (LOOP 2 MINUTOS) ---
 async function atualizarRankingGlobal() {
     try {
         const channel = client.channels.cache.get(CONFIG.CHANNELS.RANKING);
@@ -64,12 +64,11 @@ async function atualizarRankingGlobal() {
     } catch (e) { console.error("Erro no ranking:", e); }
 }
 
-// --- REGISTRO DE COMANDOS ---
+// --- COMANDOS ---
 const commands = [
     new SlashCommandBuilder().setName("x1").setDescription("Criar desafio de X1").toJSON(),
     new SlashCommandBuilder().setName("apostado").setDescription("Criar desafio Apostado").toJSON(),
-    new SlashCommandBuilder().setName("perfil").setDescription("Ver perfil")
-        .addUserOption(opt => opt.setName("user").setDescription("Usuário")).toJSON(),
+    new SlashCommandBuilder().setName("perfil").setDescription("Ver perfil").addUserOption(o => o.setName("user").setDescription("Usuário")).toJSON(),
     new SlashCommandBuilder().setName("parceria").setDescription("Criar parceria").toJSON(),
     new SlashCommandBuilder().setName("xcla").setDescription("Registrar X-Clã").toJSON()
 ];
@@ -78,7 +77,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 (async () => {
     try {
         await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body: commands });
-        console.log("Comandos registrados!");
+        console.log("Comandos OK!");
     } catch (e) { console.error(e); }
 })();
 
@@ -91,7 +90,7 @@ client.once("ready", () => {
 client.on("interactionCreate", async (interaction) => {
     
     if (interaction.isChatInputCommand()) {
-        const { commandName, channelId } = interaction;
+        const { commandName } = interaction;
 
         if (commandName === "perfil") {
             const target = interaction.options.getUser("user") || interaction.user;
@@ -110,7 +109,7 @@ client.on("interactionCreate", async (interaction) => {
             const modal = new ModalBuilder().setCustomId(`modal_${commandName}`).setTitle(`Novo ${commandName}`);
             modal.addComponents(
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("mapa").setLabel("Mapa").setStyle(TextInputStyle.Short)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("oponente").setLabel("ID do Oponente (vazio = qualquer)").setStyle(TextInputStyle.Short).setRequired(false))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("oponente").setLabel("ID Oponente (vazio = qualquer)").setStyle(TextInputStyle.Short).setRequired(false))
             );
             if (commandName === "apostado") modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("valor").setLabel("Valor (R$)").setStyle(TextInputStyle.Short)));
             return interaction.showModal(modal);
@@ -119,16 +118,16 @@ client.on("interactionCreate", async (interaction) => {
         if (commandName === "parceria") {
             const modal = new ModalBuilder().setCustomId("modal_parceria").setTitle("Nova Parceria");
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("nome_cla").setLabel("Nome do clã").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("quem_fechou").setLabel("Parceria fechada por").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("url_imagem").setLabel("URL da imagem").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("link_servidor").setLabel("Link do servidor").setStyle(TextInputStyle.Short).setRequired(true))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("nome_cla").setLabel("Clã").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("quem_fechou").setLabel("Fechado por").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("url_imagem").setLabel("Link Imagem").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("link_servidor").setLabel("Link Servidor").setStyle(TextInputStyle.Short).setRequired(true))
             );
             return interaction.showModal(modal);
         }
 
         if (commandName === "xcla") {
-            const modal = new ModalBuilder().setCustomId("modal_xcla").setTitle("Registrar X-Clã");
+            const modal = new ModalBuilder().setCustomId("modal_xcla").setTitle("Resultado X-Clã");
             modal.addComponents(
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("clafora").setLabel("Clã FORA").setStyle(TextInputStyle.Short).setRequired(true)),
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("resultado").setLabel("CASA X FORA").setStyle(TextInputStyle.Short).setRequired(true)),
@@ -170,7 +169,7 @@ client.on("interactionCreate", async (interaction) => {
 
         if (action === "aceitar") {
             const [type, criadorId, alvoId] = args;
-            if (interaction.user.id === criadorId) return interaction.reply({ content: "Você não pode entrar no seu jogo.", ephemeral: true });
+            if (interaction.user.id === criadorId) return interaction.reply({ content: "Não pode entrar no seu jogo.", ephemeral: true });
             
             const canal = await interaction.guild.channels.create({
                 name: `🥊-${type}-${interaction.user.username}`,
@@ -188,15 +187,14 @@ client.on("interactionCreate", async (interaction) => {
                 new ButtonBuilder().setCustomId(`win_ad2_${criadorId}_${interaction.user.id}_${type}`).setLabel("Vencedor AD2").setStyle(ButtonStyle.Success)
             );
             await canal.send({ content: `<@&${CONFIG.ROLES.STAFF}>, declare o vencedor:`, components: [btns] });
-            return interaction.update({ content: `✅ Desafio aceito! Canal: ${canal}`, embeds: [], components: [] });
+            return interaction.update({ content: `✅ Canal: ${canal}`, embeds: [], components: [] });
         }
 
         if (action === "win") {
             if (!interaction.member.roles.cache.has(CONFIG.ROLES.STAFF) && !interaction.member.roles.cache.has(CONFIG.ROLES.DONO)) return interaction.reply({ content: "Sem permissão.", ephemeral: true });
             const [winnerKey, p1, p2, type] = args;
-            const winId = winnerKey === "ad1" ? p1 : p2;
-            const lossId = winnerKey === "ad1" ? p2 : p1;
-            updateStats(winId, type, 'v'); updateStats(lossId, type, 'd');
+            updateStats(winnerKey === "ad1" ? p1 : p2, type, 'v');
+            updateStats(winnerKey === "ad1" ? p2 : p1, type, 'd');
             await atualizarRankingGlobal();
             await interaction.reply("🏆 Resultado salvo! Deletando em 5s...");
             setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
