@@ -143,7 +143,7 @@ client.on("interactionCreate", async (interaction) => {
 
         if (customId === "modal_parceria") {
             return interaction.reply({
-                embeds:}],
+                embeds:],
                 components: [{ type: 1, components: [{ type: 2, label: "Entre no server", style: 5, url: fields.getTextInputValue("link_servidor") }]}]
             });
         }
