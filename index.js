@@ -38,7 +38,7 @@ function updateStats(userId, type, result) {
     fs.writeFileSync('./database.json', JSON.stringify(db, null, 2));
 }
 
-// --- RANKING AUTO-UPDATE (A CADA 2 MINUTOS) ---
+// --- RANKING AUTO-UPDATE (2 MIN) ---
 async function atualizarRankingGlobal() {
     try {
         const channel = client.channels.cache.get(CONFIG.CHANNELS.RANKING);
@@ -54,25 +54,24 @@ async function atualizarRankingGlobal() {
             .setTitle("🏆 TOP 10 RANKING GERAL")
             .setColor("#FFD700")
             .setTimestamp()
-            .setFooter({ text: "Atualiza automaticamente a cada 2 min" })
-            .setDescription(sorted.map((u, i) => `**${i+1}º** <@${u.id}> — Vitórias: \`${u.x1_v + u.ap_v}\` | Derrotas: \`${u.x1_d + u.ap_d}\``).join("\n") || "Nenhum dado registrado.");
+            .setDescription(sorted.map((u, i) => `**${i+1}º** <@${u.id}> — Vitórias: \`${u.x1_v + u.ap_v}\` | Derrotas: \`${u.x1_d + u.ap_d}\``).join("\n") || "Nenhum dado.");
 
         const messages = await channel.messages.fetch({ limit: 10 });
         const lastMsg = messages.find(m => m.author.id === client.user.id);
 
         if (lastMsg) await lastMsg.edit({ embeds: [embed] });
         else await channel.send({ embeds: [embed] });
-    } catch (e) { console.error("Erro ao atualizar ranking:", e); }
+    } catch (e) { console.error("Erro no ranking:", e); }
 }
 
-// --- COMANDOS PARA REGISTRO ---
+// --- REGISTRO DE COMANDOS ---
 const commands = [
     new SlashCommandBuilder().setName("x1").setDescription("Criar desafio de X1").toJSON(),
     new SlashCommandBuilder().setName("apostado").setDescription("Criar desafio Apostado").toJSON(),
-    new SlashCommandBuilder().setName("perfil").setDescription("Ver perfil de um jogador")
-        .addUserOption(opt => opt.setName("user").setDescription("Usuário para ver perfil")).toJSON(),
-    new SlashCommandBuilder().setName("parceria").setDescription("Criar parceria com modal").toJSON(),
-    new SlashCommandBuilder().setName("xcla").setDescription("Registrar resultado de X-Clã").toJSON()
+    new SlashCommandBuilder().setName("perfil").setDescription("Ver perfil")
+        .addUserOption(opt => opt.setName("user").setDescription("Usuário")).toJSON(),
+    new SlashCommandBuilder().setName("parceria").setDescription("Criar parceria").toJSON(),
+    new SlashCommandBuilder().setName("xcla").setDescription("Registrar X-Clã").toJSON()
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
@@ -85,18 +84,16 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 // --- EVENTOS ---
 client.once("ready", () => {
-    console.log(`Bot online como ${client.user.tag}`);
+    console.log(`Bot online: ${client.user.tag}`);
     setInterval(atualizarRankingGlobal, 120000);
 });
 
 client.on("interactionCreate", async (interaction) => {
     
-    // 1. COMANDOS SLASH
     if (interaction.isChatInputCommand()) {
         const { commandName, channelId } = interaction;
 
         if (commandName === "perfil") {
-            if (channelId !== CONFIG.CHANNELS.PERFIL) return interaction.reply({ content: "Use no canal de perfil.", ephemeral: true });
             const target = interaction.options.getUser("user") || interaction.user;
             const s = getData()[target.id] || { x1_v: 0, x1_d: 0, ap_v: 0, ap_d: 0 };
             const embed = new EmbedBuilder()
@@ -113,7 +110,7 @@ client.on("interactionCreate", async (interaction) => {
             const modal = new ModalBuilder().setCustomId(`modal_${commandName}`).setTitle(`Novo ${commandName}`);
             modal.addComponents(
                 new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("mapa").setLabel("Mapa").setStyle(TextInputStyle.Short)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("oponente").setLabel("ID do Oponente (vazio = qualquer um)").setStyle(TextInputStyle.Short).setRequired(false))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("oponente").setLabel("ID do Oponente (vazio = qualquer)").setStyle(TextInputStyle.Short).setRequired(false))
             );
             if (commandName === "apostado") modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("valor").setLabel("Valor (R$)").setStyle(TextInputStyle.Short)));
             return interaction.showModal(modal);
@@ -133,16 +130,15 @@ client.on("interactionCreate", async (interaction) => {
         if (commandName === "xcla") {
             const modal = new ModalBuilder().setCustomId("modal_xcla").setTitle("Registrar X-Clã");
             modal.addComponents(
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("clafora").setLabel("Nome do clã FORA").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("resultado").setLabel("Resultado (CASA X FORA)").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("mapa").setLabel("Mapa da partida").setStyle(TextInputStyle.Short).setRequired(true)),
-                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("data").setLabel("Data da partida").setStyle(TextInputStyle.Short).setRequired(true))
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("clafora").setLabel("Clã FORA").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("resultado").setLabel("CASA X FORA").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("mapa").setLabel("Mapa").setStyle(TextInputStyle.Short).setRequired(true)),
+                new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("data").setLabel("Data").setStyle(TextInputStyle.Short).setRequired(true))
             );
             return interaction.showModal(modal);
         }
     }
 
-    // 2. RECEBIMENTO DE MODAIS
     if (interaction.isModalSubmit()) {
         const { customId, fields } = interaction;
 
@@ -169,14 +165,12 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // 3. BOTÕES (ACEITAR E VENCEDOR)
     if (interaction.isButton()) {
         const [action, ...args] = interaction.customId.split("_");
 
         if (action === "aceitar") {
             const [type, criadorId, alvoId] = args;
             if (interaction.user.id === criadorId) return interaction.reply({ content: "Você não pode entrar no seu jogo.", ephemeral: true });
-            if (alvoId !== "any" && interaction.user.id !== alvoId) return interaction.reply({ content: "Desafio privado.", ephemeral: true });
             
             const canal = await interaction.guild.channels.create({
                 name: `🥊-${type}-${interaction.user.username}`,
@@ -198,15 +192,13 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         if (action === "win") {
-            if (!interaction.member.roles.cache.has(CONFIG.ROLES.STAFF) && !interaction.member.roles.cache.has(CONFIG.ROLES.DONO)) {
-                return interaction.reply({ content: "Sem permissão.", ephemeral: true });
-            }
+            if (!interaction.member.roles.cache.has(CONFIG.ROLES.STAFF) && !interaction.member.roles.cache.has(CONFIG.ROLES.DONO)) return interaction.reply({ content: "Sem permissão.", ephemeral: true });
             const [winnerKey, p1, p2, type] = args;
             const winId = winnerKey === "ad1" ? p1 : p2;
             const lossId = winnerKey === "ad1" ? p2 : p1;
             updateStats(winId, type, 'v'); updateStats(lossId, type, 'd');
             await atualizarRankingGlobal();
-            await interaction.reply("🏆 Resultado salvo! Canal deletando em 5s...");
+            await interaction.reply("🏆 Resultado salvo! Deletando em 5s...");
             setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
         }
     }
