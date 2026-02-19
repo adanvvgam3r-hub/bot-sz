@@ -94,7 +94,6 @@ client.once("ready", () => {
 
 client.on("interactionCreate", async (interaction) => {
     
-    // 1. COMANDOS SLASH
     if (interaction.isChatInputCommand()) {
         const { commandName } = interaction;
 
@@ -144,7 +143,6 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // 2. RECEBIMENTO DE MODAIS
     if (interaction.isModalSubmit()) {
         const { customId, fields } = interaction;
 
@@ -191,7 +189,6 @@ client.on("interactionCreate", async (interaction) => {
         }
     }
 
-    // 3. BOTÕES (ACEITAR E VENCEDOR)
     if (interaction.isButton()) {
         const [action, ...args] = interaction.customId.split("_");
 
